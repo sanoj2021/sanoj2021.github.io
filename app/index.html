@@ -12,14 +12,12 @@
 <body>
   <div class="app">
     <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-name">ScienceDB</div>
-        <span class="pill">alpha</span>
-      </div>
-      <nav class="nav">
-        <a href="./index.html" class="active">&#x25CC; Graph</a>
-        <a href="./index.html">&#x25A1; Facts</a>
-        <a href="./index.html">&#x3F; Questions</a>
+      <div class="brand"><div class="brand-name">ScienceDB</div><span class="pill">alpha</span></div>
+      <nav class="nav" id="navLinks">
+        <a href="#graph" data-view="graph" class="active">Graph</a>
+        <a href="#facts" data-view="facts">Facts</a>
+        <a href="#questions" data-view="questions">Questions</a>
+        <a href="#queue" data-view="queue">Queue</a>
       </nav>
       <div class="sidebar-footer">
         <div class="pill">User: <span id="usernameLabel"></span></div>
@@ -29,10 +27,11 @@
     <main class="main">
       <header class="topbar">
         <div>
-          <strong>Knowledge graph</strong>
-          <div class="topbar-sub">Atomic facts, linked evidence, crowd review</div>
+          <strong id="viewTitle">Knowledge graph</strong>
+          <div class="topbar-sub" id="viewSub">Atomic facts, linked evidence, crowd review</div>
         </div>
         <div class="top-actions">
+          <button class="btn" id="addFactBtn">+ Add fact</button>
           <button class="iconbtn" id="themeBtn" aria-label="Toggle theme">&#9680;</button>
         </div>
       </header>
@@ -40,53 +39,38 @@
         <div class="stats-row">
           <div class="stat"><div class="stat-k">Facts</div><div class="stat-v" id="statFacts">0</div></div>
           <div class="stat"><div class="stat-k">Questions</div><div class="stat-v" id="statQuestions">0</div></div>
-          <div class="stat"><div class="stat-k">Challenged</div><div class="stat-v" id="statChallenges">0</div></div>
+          <div class="stat"><div class="stat-k">Queue</div><div class="stat-v" id="statQueue">0</div></div>
         </div>
-        <div class="graph-layout">
-          <article class="card graph-card">
-            <div class="section-title">Graph view — click a node to inspect</div>
-            <div class="graph-canvas">
-              <svg id="graphSvg" aria-label="Fact graph"></svg>
-            </div>
-            <div class="legend">
-              <span class="leg support">&#8594; supports</span>
-              <span class="leg depend">- - depends</span>
-              <span class="leg conflict">&#8594; conflicts</span>
-            </div>
+        <div class="graph-layout" id="mainLayout">
+          <article class="card graph-card" id="graphPanel">
+            <div class="section-title" id="graphPanelTitle">Graph view &mdash; click a node to inspect</div>
+            <div class="graph-canvas"><svg id="graphSvg" aria-label="Fact graph"></svg></div>
+            <div class="legend"><span class="leg support">&#x2192; supports</span><span class="leg depend">- - depends</span><span class="leg conflict">&#x2192; conflicts</span></div>
           </article>
-          <aside class="card panel">
+          <aside class="card panel" id="detailPanel">
             <div class="section-title">Selected fact</div>
             <h2 id="factTitle" class="fact-title"></h2>
             <div class="badges" id="factMeta"></div>
             <p id="factSummary" class="fact-summary"></p>
             <div class="vote-block">
               <div class="section-title" style="margin:.9rem 0 .45rem">Confidence vote</div>
-              <div class="range-wrap">
-                <input id="voteRange" type="range" min="1" max="5" step="1" />
-                <strong><span id="confidenceValue">4</span> / 5</strong>
-              </div>
+              <div class="range-wrap"><input id="voteRange" type="range" min="1" max="5" step="1" /><strong><span id="confidenceValue">4</span> / 5</strong></div>
             </div>
             <div class="actions">
               <button class="btn primary" id="voteBtn">Vote</button>
               <button class="btn warn" id="factChallengeBtn">Challenge fact</button>
             </div>
+            <div class="notice hidden" id="voteNotice"></div>
           </aside>
         </div>
-        <div class="graph-layout">
-          <section class="card panel">
-            <div class="section-title">Linked facts</div>
-            <div class="list" id="linkedFacts"></div>
-          </section>
-          <section class="card panel">
-            <div class="section-title">Sources</div>
-            <div class="list" id="sources"></div>
-          </section>
+        <div class="graph-layout" id="lowerLayout">
+          <section class="card panel"><div class="section-title" id="lowerLeftTitle">Linked facts</div><div class="list" id="linkedFacts"></div></section>
+          <section class="card panel"><div class="section-title">Sources</div><div class="list" id="sources"></div></section>
         </div>
       </section>
     </main>
   </div>
 
-  <!-- Challenge modal -->
   <div class="modal-backdrop" id="challengeModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal">
       <h3 id="modalTitle" class="modal-title">Challenge</h3>
@@ -104,9 +88,35 @@
         <input type="hidden" id="targetInfo" />
         <div class="actions">
           <button type="submit" class="btn primary">Submit challenge</button>
-          <button type="button" class="btn" id="closeModal">Close</button>
+          <button type="button" class="btn" id="closeModal">Cancel</button>
         </div>
         <div class="notice hidden" id="challengeNotice"></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="factModal" role="dialog" aria-modal="true" aria-labelledby="factModalTitle">
+    <div class="modal">
+      <h3 id="factModalTitle" class="modal-title">Add fact</h3>
+      <p class="modal-intro">Submit a new atomic fact. It will appear in the queue for moderation before becoming stable.</p>
+      <form id="factForm">
+        <label for="newFactTitle">Fact statement</label>
+        <textarea id="newFactTitle" rows="2" required placeholder="A clear, single atomic statement."></textarea>
+        <label for="newFactSummary">Summary / context</label>
+        <textarea id="newFactSummary" rows="3" required placeholder="Brief explanation and evidence context."></textarea>
+        <label for="newFactType">Type</label>
+        <select id="newFactType">
+          <option value="fact">Fact</option>
+          <option value="claim">Claim</option>
+          <option value="question">Question</option>
+        </select>
+        <label for="newFactLinks">Link to existing fact IDs (comma-separated, e.g. f1, f3)</label>
+        <input id="newFactLinks" placeholder="f1, f2" />
+        <div class="actions">
+          <button type="submit" class="btn primary">Submit for review</button>
+          <button type="button" class="btn" id="closeFactModal">Cancel</button>
+        </div>
+        <div class="notice hidden" id="factNotice"></div>
       </form>
     </div>
   </div>
