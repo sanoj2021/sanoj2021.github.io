@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScienceDB — Graph</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/app.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-name">ScienceDB</div>
+        <span class="pill">alpha</span>
+      </div>
+      <nav class="nav">
+        <a href="./index.html" class="active">&#x25CC; Graph</a>
+        <a href="./index.html">&#x25A1; Facts</a>
+        <a href="./index.html">&#x3F; Questions</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="pill">User: <span id="usernameLabel"></span></div>
+        <button class="btn-ghost" id="logoutBtn">Logout</button>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <strong>Knowledge graph</strong>
+          <div class="topbar-sub">Atomic facts, linked evidence, crowd review</div>
+        </div>
+        <div class="top-actions">
+          <button class="iconbtn" id="themeBtn" aria-label="Toggle theme">&#9680;</button>
+        </div>
+      </header>
+      <section class="content">
+        <div class="stats-row">
+          <div class="stat"><div class="stat-k">Facts</div><div class="stat-v" id="statFacts">0</div></div>
+          <div class="stat"><div class="stat-k">Questions</div><div class="stat-v" id="statQuestions">0</div></div>
+          <div class="stat"><div class="stat-k">Challenged</div><div class="stat-v" id="statChallenges">0</div></div>
+        </div>
+        <div class="graph-layout">
+          <article class="card graph-card">
+            <div class="section-title">Graph view — click a node to inspect</div>
+            <div class="graph-canvas">
+              <svg id="graphSvg" aria-label="Fact graph"></svg>
+            </div>
+            <div class="legend">
+              <span class="leg support">&#8594; supports</span>
+              <span class="leg depend">- - depends</span>
+              <span class="leg conflict">&#8594; conflicts</span>
+            </div>
+          </article>
+          <aside class="card panel">
+            <div class="section-title">Selected fact</div>
+            <h2 id="factTitle" class="fact-title"></h2>
+            <div class="badges" id="factMeta"></div>
+            <p id="factSummary" class="fact-summary"></p>
+            <div class="vote-block">
+              <div class="section-title" style="margin:.9rem 0 .45rem">Confidence vote</div>
+              <div class="range-wrap">
+                <input id="voteRange" type="range" min="1" max="5" step="1" />
+                <strong><span id="confidenceValue">4</span> / 5</strong>
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn primary" id="voteBtn">Vote</button>
+              <button class="btn warn" id="factChallengeBtn">Challenge fact</button>
+            </div>
+          </aside>
+        </div>
+        <div class="graph-layout">
+          <section class="card panel">
+            <div class="section-title">Linked facts</div>
+            <div class="list" id="linkedFacts"></div>
+          </section>
+          <section class="card panel">
+            <div class="section-title">Sources</div>
+            <div class="list" id="sources"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Challenge modal -->
+  <div class="modal-backdrop" id="challengeModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal">
+      <h3 id="modalTitle" class="modal-title">Challenge</h3>
+      <p id="modalIntro" class="modal-intro"></p>
+      <form id="challengeForm">
+        <div id="challengeTypeWrap">
+          <label for="challengeType">Challenge type</label>
+          <select id="challengeType">
+            <option value="irrelevant">Source is irrelevant for this fact</option>
+            <option value="false">Source is false or unreliable</option>
+          </select>
+        </div>
+        <label for="challengeReason">Reason (required)</label>
+        <textarea id="challengeReason" rows="5" placeholder="Describe the issue clearly." required></textarea>
+        <input type="hidden" id="targetInfo" />
+        <div class="actions">
+          <button type="submit" class="btn primary">Submit challenge</button>
+          <button type="button" class="btn" id="closeModal">Close</button>
+        </div>
+        <div class="notice hidden" id="challengeNotice"></div>
+      </form>
+    </div>
+  </div>
+
+  <script src="./js/data.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>

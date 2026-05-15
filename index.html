@@ -3,530 +3,68 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome — sanoj2021</title>
+  <title>ScienceDB</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300..700&display=swap" rel="stylesheet">
   <style>
-    /* ── Design Tokens ── */
-    :root, [data-theme="light"] {
-      --color-bg: #f7f6f2; --color-surface: #f9f8f5; --color-surface-2: #fbfbf9;
-      --color-surface-offset: #f3f0ec; --color-border: #d4d1ca; --color-divider: #dcd9d5;
-      --color-text: #28251d; --color-text-muted: #7a7974; --color-text-faint: #bab9b4;
-      --color-primary: #01696f; --color-primary-hover: #0c4e54; --color-primary-active: #0f3638;
-      --color-primary-highlight: #cedcd8; --color-error: #a12c7b;
-      --shadow-sm: 0 1px 2px oklch(0.2 0.01 80 / .06); --shadow-md: 0 4px 12px oklch(0.2 0.01 80 / .08);
-      --shadow-lg: 0 12px 32px oklch(0.2 0.01 80 / .12);
-      --radius-sm: .375rem; --radius-md: .5rem; --radius-lg: .75rem; --radius-xl: 1rem; --radius-full: 9999px;
-      --space-1:.25rem;--space-2:.5rem;--space-3:.75rem;--space-4:1rem;--space-5:1.25rem;
-      --space-6:1.5rem;--space-8:2rem;--space-10:2.5rem;--space-12:3rem;--space-16:4rem;
-      --text-xs:clamp(.75rem,.7rem + .25vw,.875rem); --text-sm:clamp(.875rem,.8rem + .35vw,1rem);
-      --text-base:clamp(1rem,.95rem + .25vw,1.125rem); --text-lg:clamp(1.125rem,1rem + .75vw,1.5rem);
-      --text-xl:clamp(1.5rem,1.2rem + 1.25vw,2.25rem); --text-2xl:clamp(2rem,1.2rem + 2.5vw,3.5rem);
-      --font-display: "Instrument Serif", Georgia, serif;
-      --font-body: "Inter", "Helvetica Neue", sans-serif;
-      --transition: 180ms cubic-bezier(.16,1,.3,1);
-    }
-    [data-theme="dark"] {
-      --color-bg: #171614; --color-surface: #1c1b19; --color-surface-2: #201f1d;
-      --color-surface-offset: #1d1c1a; --color-border: #393836; --color-divider: #262523;
-      --color-text: #cdccca; --color-text-muted: #797876; --color-text-faint: #5a5957;
-      --color-primary: #4f98a3; --color-primary-hover: #227f8b; --color-primary-active: #1a626b;
-      --color-primary-highlight: #313b3b; --color-error: #d163a7;
-      --shadow-sm: 0 1px 2px oklch(0 0 0/.2); --shadow-md: 0 4px 12px oklch(0 0 0/.3);
-      --shadow-lg: 0 12px 32px oklch(0 0 0/.4);
-    }
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme]) {
-        --color-bg:#171614;--color-surface:#1c1b19;--color-surface-2:#201f1d;
-        --color-surface-offset:#1d1c1a;--color-border:#393836;--color-divider:#262523;
-        --color-text:#cdccca;--color-text-muted:#797876;--color-text-faint:#5a5957;
-        --color-primary:#4f98a3;--color-primary-hover:#227f8b;--color-primary-active:#1a626b;
-        --color-primary-highlight:#313b3b;--color-error:#d163a7;
-        --shadow-sm:0 1px 2px oklch(0 0 0/.2);--shadow-md:0 4px 12px oklch(0 0 0/.3);
-        --shadow-lg:0 12px 32px oklch(0 0 0/.4);
-      }
-    }
-    /* ── Reset ── */
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;scroll-behavior:smooth}
-    body{min-height:100dvh;font-family:var(--font-body);font-size:var(--text-base);
-         color:var(--color-text);background:var(--color-bg);transition:background var(--transition),color var(--transition)}
-    img,svg{display:block;max-width:100%}
-    input,button{font:inherit;color:inherit}
-    button{cursor:pointer;background:none;border:none}
-    a,button,[role=button],input{transition:color var(--transition),background var(--transition),
-         border-color var(--transition),box-shadow var(--transition)}
-    ::selection{background:oklch(from var(--color-primary) l c h/.25);color:var(--color-text)}
-    :focus-visible{outline:2px solid var(--color-primary);outline-offset:3px;border-radius:var(--radius-sm)}
-
-    /* ── Layout ── */
-    .page { display: none; min-height: 100dvh; }
-    .page.active { display: flex; flex-direction: column; }
-
-    /* ── Header ── */
-    header {
-      position: sticky; top: 0; z-index: 100;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: var(--space-4) var(--space-8);
-      background: color-mix(in oklch, var(--color-bg) 85%, transparent);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid oklch(from var(--color-text) l c h / .08);
-    }
-    .logo {
-      display: flex; align-items: center; gap: var(--space-3);
-      font-family: var(--font-display); font-size: var(--text-lg);
-      color: var(--color-text); text-decoration: none;
-    }
-    .logo svg { color: var(--color-primary); }
-    .header-actions { display: flex; align-items: center; gap: var(--space-3); }
-    .theme-toggle {
-      width: 40px; height: 40px; border-radius: var(--radius-full);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--color-text-muted);
-    }
-    .theme-toggle:hover { background: var(--color-surface-offset); color: var(--color-text); }
-
-    /* ── Hero ── */
-    .hero {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      padding: var(--space-16) var(--space-8);
-      text-align: center; position: relative; overflow: hidden;
-    }
-    .hero::before {
-      content: ""; position: absolute; inset: 0; z-index: 0;
-      background: radial-gradient(ellipse 80% 50% at 50% 0%, oklch(from var(--color-primary) l c h / .12), transparent);
-      pointer-events: none;
-    }
-    .hero > * { position: relative; z-index: 1; }
-    .hero-eyebrow {
-      font-size: var(--text-xs); font-weight: 600; letter-spacing: .12em;
-      text-transform: uppercase; color: var(--color-primary);
-      margin-bottom: var(--space-4);
-      display: flex; align-items: center; gap: var(--space-2);
-    }
-    .hero-eyebrow::before, .hero-eyebrow::after {
-      content: ""; flex: 1; height: 1px;
-      background: oklch(from var(--color-primary) l c h / .3);
-      max-width: 40px;
-    }
-    .hero h1 {
-      font-family: var(--font-display); font-size: var(--text-2xl);
-      line-height: 1.1; letter-spacing: -.02em; margin-bottom: var(--space-5);
-      max-width: 14ch;
-    }
-    .hero p {
-      font-size: var(--text-base); color: var(--color-text-muted);
-      max-width: 50ch; margin-bottom: var(--space-10);
-    }
-
-    /* ── Login Card ── */
-    .login-card {
-      width: 100%; max-width: 400px;
-      background: var(--color-surface);
-      border: 1px solid oklch(from var(--color-text) l c h / .08);
-      border-radius: var(--radius-xl); padding: var(--space-8);
-      box-shadow: var(--shadow-lg);
-    }
-    .login-card h2 {
-      font-family: var(--font-display); font-size: var(--text-xl);
-      margin-bottom: var(--space-2); text-align: left;
-    }
-    .login-card .subtitle {
-      font-size: var(--text-sm); color: var(--color-text-muted);
-      margin-bottom: var(--space-6); text-align: left;
-    }
-    .form-group { margin-bottom: var(--space-4); }
-    .form-group label {
-      display: block; font-size: var(--text-sm); font-weight: 500;
-      margin-bottom: var(--space-2); color: var(--color-text);
-    }
-    .form-group input {
-      width: 100%; padding: var(--space-3) var(--space-4);
-      background: var(--color-surface-2);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md); font-size: var(--text-sm);
-      color: var(--color-text); outline: none;
-    }
-    .form-group input:focus {
-      border-color: var(--color-primary);
-      box-shadow: 0 0 0 3px oklch(from var(--color-primary) l c h / .15);
-    }
-    .form-group input::placeholder { color: var(--color-text-faint); }
-    .error-msg {
-      display: none; font-size: var(--text-xs); color: var(--color-error);
-      margin-top: var(--space-2);
-    }
-    .error-msg.visible { display: block; }
-    .btn-primary {
-      width: 100%; padding: var(--space-3) var(--space-4);
-      background: var(--color-primary); color: #fff;
-      border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 600;
-      letter-spacing: .01em; margin-top: var(--space-2);
-    }
-    .btn-primary:hover { background: var(--color-primary-hover); }
-    .btn-primary:active { background: var(--color-primary-active); }
-
-    /* ── Dashboard Page ── */
-    .dashboard-layout {
-      flex: 1; display: grid; grid-template-columns: 240px 1fr;
-      min-height: calc(100dvh - 65px);
-    }
-    @media (max-width: 768px) {
-      .dashboard-layout { grid-template-columns: 1fr; }
-      .sidebar { display: none; }
-    }
-    .sidebar {
-      background: var(--color-surface);
-      border-right: 1px solid oklch(from var(--color-text) l c h / .08);
-      padding: var(--space-6) var(--space-4);
-      display: flex; flex-direction: column; gap: var(--space-2);
-    }
-    .sidebar-section {
-      font-size: var(--text-xs); font-weight: 600; letter-spacing: .1em;
-      text-transform: uppercase; color: var(--color-text-faint);
-      padding: var(--space-2) var(--space-3);
-      margin-top: var(--space-4); margin-bottom: var(--space-1);
-    }
-    .sidebar-item {
-      display: flex; align-items: center; gap: var(--space-3);
-      padding: var(--space-3) var(--space-3); border-radius: var(--radius-md);
-      font-size: var(--text-sm); color: var(--color-text-muted);
-      cursor: pointer; text-decoration: none;
-    }
-    .sidebar-item:hover { background: var(--color-surface-offset); color: var(--color-text); }
-    .sidebar-item.active { background: var(--color-primary-highlight); color: var(--color-primary); }
-    .sidebar-item svg { flex-shrink: 0; }
-    .main-content { padding: var(--space-8); overflow-y: auto; }
-    .greeting {
-      font-family: var(--font-display); font-size: var(--text-xl);
-      margin-bottom: var(--space-2);
-    }
-    .greeting-sub { font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-8); }
-
-    .kpi-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: var(--space-4); margin-bottom: var(--space-8);
-    }
-    .kpi-card {
-      background: var(--color-surface); border-radius: var(--radius-lg);
-      padding: var(--space-5); border: 1px solid oklch(from var(--color-text) l c h / .06);
-      box-shadow: var(--shadow-sm);
-    }
-    .kpi-label { font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: var(--space-2); font-weight: 500; }
-    .kpi-value { font-family: var(--font-display); font-size: var(--text-xl); color: var(--color-text); font-variant-numeric: tabular-nums; }
-    .kpi-trend { font-size: var(--text-xs); color: var(--color-primary); margin-top: var(--space-1); }
-
-    .section-title { font-size: var(--text-lg); font-weight: 600; margin-bottom: var(--space-4); }
-    .activity-list { display: flex; flex-direction: column; gap: var(--space-3); }
-    .activity-item {
-      display: flex; align-items: flex-start; gap: var(--space-4);
-      padding: var(--space-4); background: var(--color-surface);
-      border-radius: var(--radius-lg); border: 1px solid oklch(from var(--color-text) l c h / .06);
-    }
-    .activity-dot {
-      width: 8px; height: 8px; border-radius: var(--radius-full);
-      background: var(--color-primary); flex-shrink: 0; margin-top: 6px;
-    }
-    .activity-text { font-size: var(--text-sm); color: var(--color-text); }
-    .activity-time { font-size: var(--text-xs); color: var(--color-text-faint); margin-top: var(--space-1); }
-
-    .user-badge {
-      display: flex; align-items: center; gap: var(--space-3);
-      padding: var(--space-3) var(--space-4);
-      background: var(--color-surface); border-radius: var(--radius-lg);
-      border: 1px solid oklch(from var(--color-text) l c h / .08);
-      font-size: var(--text-sm); cursor: pointer;
-    }
-    .user-badge:hover { background: var(--color-surface-offset); }
-    .user-avatar {
-      width: 32px; height: 32px; border-radius: var(--radius-full);
-      background: var(--color-primary-highlight); display: flex; align-items: center; justify-content: center;
-      font-size: var(--text-xs); font-weight: 700; color: var(--color-primary);
-    }
-
-    footer {
-      padding: var(--space-6) var(--space-8);
-      border-top: 1px solid oklch(from var(--color-text) l c h / .06);
-      text-align: center; font-size: var(--text-xs); color: var(--color-text-faint);
-    }
-
-    @keyframes shake {
-      0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)}
-      60%{transform:translateX(-5px)} 80%{transform:translateX(5px)}
-    }
-    .shake { animation: shake .35s ease; }
-
-    @keyframes fadeUp {
-      from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)}
-    }
-    .fade-up { animation: fadeUp .5s cubic-bezier(.16,1,.3,1) both; }
-    .fade-up-d1 { animation-delay:.08s; }
-    .fade-up-d2 { animation-delay:.16s; }
-    .fade-up-d3 { animation-delay:.24s; }
-
-    @media (prefers-reduced-motion: reduce) {
-      *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
-    }
+    :root,[data-theme="light"]{--bg:#f7f6f2;--surface:#f9f8f5;--surface2:#fbfbf9;--text:#28251d;--muted:#7a7974;--border:#d4d1ca;--primary:#01696f;--primary-hover:#0c4e54;--error:#a12c7b;--shadow:0 12px 32px oklch(0.2 0.01 80/.12)}
+    [data-theme="dark"]{--bg:#171614;--surface:#1c1b19;--surface2:#201f1d;--text:#cdccca;--muted:#797876;--border:#393836;--primary:#4f98a3;--primary-hover:#227f8b;--error:#d163a7;--shadow:0 12px 32px oklch(0 0 0/.35)}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{min-height:100vh;font:16px/1.6 Inter,sans-serif;background:var(--bg);color:var(--text)}
+    button,input{font:inherit}button{cursor:pointer}
+    .wrap{min-height:100vh;display:grid;place-items:center;padding:2rem}
+    .card{width:min(100%,420px);background:var(--surface);border:1px solid color-mix(in oklab,var(--text) 8%,transparent);border-radius:1rem;padding:2rem;box-shadow:var(--shadow)}
+    .eyebrow{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--primary);margin-bottom:1rem}
+    .title{font-family:"Instrument Serif",serif;font-size:clamp(2rem,4vw,3.25rem);line-height:1.05;margin-bottom:.75rem}
+    .sub{color:var(--muted);margin-bottom:1.5rem}
+    label{display:block;font-size:.92rem;margin-bottom:.35rem}
+    input{width:100%;padding:.85rem 1rem;border-radius:.75rem;border:1px solid var(--border);background:var(--surface2);color:var(--text);margin-bottom:1rem}
+    .btn{width:100%;padding:.95rem 1rem;border:none;border-radius:.8rem;background:var(--primary);color:white;font-weight:700}
+    .btn:hover{background:var(--primary-hover)}
+    .err{display:none;color:var(--error);font-size:.85rem;margin-top:.75rem}
+    .err.show{display:block}
+    .head{position:fixed;top:0;left:0;right:0;padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center;z-index:10}
+    .logo{font-family:"Instrument Serif",serif;font-size:1.2rem}
+    .theme-btn{border:1px solid color-mix(in oklab,var(--text) 10%,transparent);background:var(--surface);color:var(--text);width:42px;height:42px;border-radius:999px}
   </style>
 </head>
 <body>
-
-<!-- LANDING PAGE -->
-<div id="page-landing" class="page active">
-  <header>
-    <a href="#" class="logo" onclick="return false">
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="Logo">
-        <rect x="2" y="2" width="11" height="11" rx="2" fill="currentColor"/>
-        <rect x="15" y="2" width="11" height="11" rx="2" fill="currentColor" opacity=".5"/>
-        <rect x="2" y="15" width="11" height="11" rx="2" fill="currentColor" opacity=".5"/>
-        <rect x="15" y="15" width="11" height="11" rx="2" fill="currentColor" opacity=".25"/>
-      </svg>
-      sanoj2021
-    </a>
-    <div class="header-actions">
-      <button class="theme-toggle" data-theme-toggle aria-label="Toggle theme">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-        </svg>
-      </button>
-    </div>
+  <header class="head">
+    <div class="logo">ScienceDB</div>
+    <button class="theme-btn" id="themeBtn" aria-label="Toggle theme">&#9680;</button>
   </header>
-
-  <main class="hero">
-    <div class="hero-eyebrow fade-up">Member Portal</div>
-    <h1 class="fade-up fade-up-d1">Welcome back.<br><em>Sign in to continue.</em></h1>
-    <p class="fade-up fade-up-d2">Your personal space — secure, private, and always available.</p>
-
-    <div class="login-card fade-up fade-up-d3" id="login-card">
-      <h2>Sign in</h2>
-      <p class="subtitle">Enter your credentials to access your dashboard.</p>
-      <form id="login-form" onsubmit="handleLogin(event)">
-        <div class="form-group">
-          <label for="username">Username</label>
-          <input type="text" id="username" name="username" placeholder="your username" autocomplete="username" required />
-        </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input type="password" id="password" name="password" placeholder="••••••••••••" autocomplete="current-password" required />
-          <div class="error-msg" id="login-error">Incorrect username or password. Please try again.</div>
-        </div>
-        <button type="submit" class="btn-primary">Sign in &rarr;</button>
+  <main class="wrap">
+    <section class="card">
+      <div class="eyebrow">Knowledge Graph Prototype</div>
+      <h1 class="title">Login to ScienceDB</h1>
+      <p class="sub">Atomic facts, linked evidence, and crowd-driven credibility.</p>
+      <form id="loginForm">
+        <label for="username">Username</label>
+        <input id="username" autocomplete="username" required />
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+        <button class="btn" type="submit">Enter app</button>
+        <div class="err" id="err">Incorrect username or password.</div>
       </form>
-    </div>
+    </section>
   </main>
-
-  <footer>&copy; 2026 sanoj2021 &middot; All rights reserved</footer>
-</div>
-
-<!-- DASHBOARD PAGE -->
-<div id="page-dashboard" class="page">
-  <header>
-    <a href="#" class="logo" onclick="return false">
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="Logo">
-        <rect x="2" y="2" width="11" height="11" rx="2" fill="currentColor"/>
-        <rect x="15" y="2" width="11" height="11" rx="2" fill="currentColor" opacity=".5"/>
-        <rect x="2" y="15" width="11" height="11" rx="2" fill="currentColor" opacity=".5"/>
-        <rect x="15" y="15" width="11" height="11" rx="2" fill="currentColor" opacity=".25"/>
-      </svg>
-      sanoj2021
-    </a>
-    <div class="header-actions">
-      <button class="theme-toggle" data-theme-toggle aria-label="Toggle theme">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-        </svg>
-      </button>
-      <div class="user-badge" onclick="handleLogout()">
-        <div class="user-avatar" id="user-initials">MN</div>
-        <span id="user-display-name">mrNobody</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-text-muted)">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
-        </svg>
-      </div>
-    </div>
-  </header>
-
-  <div class="dashboard-layout">
-    <aside class="sidebar">
-      <span class="sidebar-section">Navigation</span>
-      <a class="sidebar-item active" onclick="return false">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-          <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-        </svg>
-        Overview
-      </a>
-      <a class="sidebar-item" onclick="return false">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-        </svg>
-        Documents
-      </a>
-      <a class="sidebar-item" onclick="return false">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-        Messages
-      </a>
-      <span class="sidebar-section">Account</span>
-      <a class="sidebar-item" onclick="return false">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="7" r="4"/><path d="M20 21v-2a8 8 0 0 0-16 0v2"/>
-        </svg>
-        Profile
-      </a>
-      <a class="sidebar-item" onclick="return false">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
-        </svg>
-        Settings
-      </a>
-      <a class="sidebar-item" onclick="handleLogout()" style="margin-top:auto;color:var(--color-error)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
-        </svg>
-        Sign out
-      </a>
-    </aside>
-
-    <main class="main-content">
-      <div class="greeting">Good day, <em id="greeting-name">mrNobody</em></div>
-      <p class="greeting-sub">Here's your dashboard overview &mdash; <span id="greeting-date"></span></p>
-
-      <div class="kpi-grid">
-        <div class="kpi-card">
-          <div class="kpi-label">Sessions Today</div>
-          <div class="kpi-value" id="kpi-sessions">0</div>
-          <div class="kpi-trend">&#9650; 12% vs yesterday</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Documents</div>
-          <div class="kpi-value">24</div>
-          <div class="kpi-trend">3 new this week</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Messages</div>
-          <div class="kpi-value">7</div>
-          <div class="kpi-trend">2 unread</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Uptime</div>
-          <div class="kpi-value">99.9%</div>
-          <div class="kpi-trend">All systems nominal</div>
-        </div>
-      </div>
-
-      <div class="section-title">Recent Activity</div>
-      <div class="activity-list">
-        <div class="activity-item">
-          <div class="activity-dot"></div>
-          <div>
-            <div class="activity-text">Signed in from a new session</div>
-            <div class="activity-time">Just now</div>
-          </div>
-        </div>
-        <div class="activity-item">
-          <div class="activity-dot" style="background:var(--color-text-faint)"></div>
-          <div>
-            <div class="activity-text">Document <strong>Q1_report.pdf</strong> was uploaded</div>
-            <div class="activity-time">2 hours ago</div>
-          </div>
-        </div>
-        <div class="activity-item">
-          <div class="activity-dot" style="background:var(--color-text-faint)"></div>
-          <div>
-            <div class="activity-text">Profile settings updated</div>
-            <div class="activity-time">Yesterday at 14:30</div>
-          </div>
-        </div>
-        <div class="activity-item">
-          <div class="activity-dot" style="background:var(--color-text-faint)"></div>
-          <div>
-            <div class="activity-text">New message received from <strong>Admin</strong></div>
-            <div class="activity-time">3 days ago</div>
-          </div>
-        </div>
-      </div>
-    </main>
-  </div>
-</div>
-
-<script>
-  const USERS = [{ username: "mrNobody", password: "NdQUQbCMHXbheY5skllU" }];
-  let currentUser = null;
-
-  // Theme toggle
-  (function(){
-    const root = document.documentElement;
-    let theme = root.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    root.setAttribute("data-theme", theme);
-    function updateIcons() {
-      document.querySelectorAll("[data-theme-toggle]").forEach(btn => {
-        btn.innerHTML = theme === "dark"
-          ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`
-          : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-      });
-    }
-    updateIcons();
-    document.addEventListener("click", e => {
-      if (e.target.closest("[data-theme-toggle]")) {
-        theme = theme === "dark" ? "light" : "dark";
-        root.setAttribute("data-theme", theme);
-        updateIcons();
-      }
+  <script>
+    const USERS=[{username:'mrNobody',password:'NdQUQbCMHXbheY5skllU'}];
+    const root=document.documentElement;
+    let theme=root.getAttribute('data-theme')||'dark';
+    document.getElementById('themeBtn').onclick=()=>{
+      theme=theme==='dark'?'light':'dark';
+      root.setAttribute('data-theme',theme);
+    };
+    document.getElementById('loginForm').addEventListener('submit',e=>{
+      e.preventDefault();
+      const u=document.getElementById('username').value.trim();
+      const p=document.getElementById('password').value;
+      const ok=USERS.some(x=>x.username===u&&x.password===p);
+      if(ok){sessionStorage.setItem('scienceDbUser',u);window.location.href='./app/';}
+      else{document.getElementById('err').classList.add('show');}
     });
-  })();
-
-  function showPage(id) {
-    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
-    document.getElementById(id).classList.add("active");
-  }
-
-  function handleLogin(e) {
-    e.preventDefault();
-    const uname = document.getElementById("username").value.trim();
-    const pw    = document.getElementById("password").value;
-    const errEl = document.getElementById("login-error");
-    const card  = document.getElementById("login-card");
-    const match = USERS.find(u => u.username === uname && u.password === pw);
-    if (match) {
-      errEl.classList.remove("visible");
-      currentUser = match;
-      document.getElementById("greeting-name").textContent = match.username;
-      document.getElementById("user-display-name").textContent = match.username;
-      document.getElementById("user-initials").textContent = match.username.slice(0,2).toUpperCase();
-      document.getElementById("greeting-date").textContent = new Date().toLocaleDateString("en-GB",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
-      animateCount("kpi-sessions", 0, 1, 600);
-      showPage("page-dashboard");
-    } else {
-      errEl.classList.add("visible");
-      card.classList.remove("shake");
-      void card.offsetWidth;
-      card.classList.add("shake");
-    }
-  }
-
-  function handleLogout() {
-    currentUser = null;
-    document.getElementById("username").value = "";
-    document.getElementById("password").value = "";
-    document.getElementById("login-error").classList.remove("visible");
-    showPage("page-landing");
-  }
-
-  function animateCount(id, from, to, duration) {
-    const el = document.getElementById(id);
-    const start = performance.now();
-    (function step(ts) {
-      const p = Math.min((ts - start) / duration, 1);
-      el.textContent = Math.round(from + (to - from) * p);
-      if (p < 1) requestAnimationFrame(step);
-    })(performance.now());
-  }
-</script>
+  </script>
 </body>
 </html>
