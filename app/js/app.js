@@ -51,11 +51,10 @@
 
   /* ── Node positions ──────────────────────────────────────────── */
   const POS = {f1:[280,175],f2:[490,95],f3:[510,275],f4:[740,120],f5:[755,305],f6:[235,340]};
-  // Deterministic layout for dynamically added nodes using a golden-angle spiral
   function posOf(id){
     if(POS[id]) return [...POS[id]];
     const idx = state.nodes.findIndex(n=>n.id===id);
-    const angle = idx * 2.399963; // golden angle in radians
+    const angle = idx * 2.399963;
     const r = 80 + idx * 22;
     return [450 + r*Math.cos(angle), 240 + r*Math.sin(angle)];
   }
@@ -70,7 +69,6 @@
   }
 
   function clampTransform(){
-    // loose clamp: always keep at least 200px of canvas in view
     const margin = 200;
     const w = VW*vscale, h = VH*vscale;
     vx = Math.min(margin, Math.max(VW - w - margin, vx));
@@ -136,9 +134,8 @@
     let dragging=false, startX=0, startY=0, startVx=0, startVy=0;
     let lastDist = null;
 
-    // Pointer drag (mouse + single-touch)
     canvas.onpointerdown = e=>{
-      if(e.target.closest('.node')) return; // let node clicks pass
+      if(e.target.closest('.node')) return;
       canvas.setPointerCapture(e.pointerId);
       dragging=true; startX=e.clientX; startY=e.clientY; startVx=vx; startVy=vy;
     };
@@ -154,17 +151,16 @@
     };
     canvas.onpointerup = canvas.onpointercancel = ()=>{ dragging=false; lastDist=null; };
 
-    // Mouse wheel zoom
+    // Mouse wheel zoom — ~50% slower: factors 1.06 / 0.94 (was 1.12 / 0.89)
     canvas.onwheel = e=>{
       e.preventDefault();
       const rect = svg.getBoundingClientRect();
       const scaleX = VW / rect.width;
       const scaleY = VH / rect.height;
-      const mx = (e.clientX - rect.left)*scaleX; // cursor in SVG coords before transform
+      const mx = (e.clientX - rect.left)*scaleX;
       const my = (e.clientY - rect.top)*scaleY;
-      const factor = e.deltaY < 0 ? 1.12 : 0.89;
+      const factor = e.deltaY < 0 ? 1.06 : 0.94;
       const ns = Math.min(4, Math.max(0.25, vscale*factor));
-      // zoom toward cursor
       vx = mx - (mx - vx)*(ns/vscale);
       vy = my - (my - vy)*(ns/vscale);
       vscale = ns;
@@ -172,14 +168,15 @@
       applyTransform();
     };
 
-    // Pinch-to-zoom (touch)
+    // Pinch-to-zoom — dampen by 50%: effective factor = 0.5 + rawFactor*0.5
     canvas.ontouchstart = e=>{ if(e.touches.length===2){ lastDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); } };
     canvas.ontouchmove = e=>{
       if(e.touches.length===2){
         e.preventDefault();
         const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
         if(lastDist){
-          const factor = d/lastDist;
+          const rawFactor = d/lastDist;
+          const factor = 0.5 + rawFactor*0.5; // dampen ~50%
           vscale = Math.min(4, Math.max(0.25, vscale*factor));
           clampTransform(); applyTransform();
         }
@@ -215,13 +212,13 @@
     $('#confidenceValue').textContent = sliderVal;
     $('#voteRange').value = sliderVal;
 
+    // Vote button: always enabled — shows "Update vote" if already voted
+    $('#voteBtn').disabled = false;
     if(existingVote){
-      $('#voteBtn').disabled = true;
-      $('#voteBtn').textContent = `Voted (${existingVote.value}/5)`;
-      $('#voteNotice').textContent = `You already voted ${existingVote.value}/5 on this fact.`;
+      $('#voteBtn').textContent = 'Update vote';
+      $('#voteNotice').textContent = `Your current vote: ${existingVote.value}/5. Move the slider to change it.`;
       $('#voteNotice').classList.remove('hidden');
     } else {
-      $('#voteBtn').disabled = false;
       $('#voteBtn').textContent = 'Vote';
       $('#voteNotice').classList.add('hidden');
     }
@@ -251,11 +248,9 @@
       saveState();
       renderGraph();
       renderDetail();
-      // scroll detail panel into view
       $('#detailPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
     }));
 
-    // Sources
     renderSources(n);
   }
 
@@ -273,7 +268,6 @@
       : '<div class="item"><p>No sources attached yet.</p></div>';
     $$('[data-sid]').forEach(btn=>btn.addEventListener('click',()=>openChallenge(btn.dataset.sid, btn.dataset.action)));
     $('#sourceNotice').classList.add('hidden');
-    // reset add-source form
     $('#srcTitle').value='';
     $('#srcNote').value='';
     $('#addSourceDetails').removeAttribute('open');
@@ -374,16 +368,26 @@
 
   $('#voteBtn').addEventListener('click',()=>{
     const n = byId(state.currentId); if(!n) return;
-    if(userVoteFor(n.id)){
-      $('#voteNotice').textContent = 'You have already voted on this fact. Each user can vote once per fact.';
-      $('#voteNotice').classList.remove('hidden');
-      return;
-    }
     const v = parseInt($('#voteRange').value, 10);
-    n.confidence = ((n.confidence * n.votes) + v) / (n.votes + 1);
-    n.votes++;
-    state.votes.push({targetId:n.id, user, value:v, timestamp:Date.now()});
+    const existing = userVoteFor(n.id);
+    if(existing){
+      // Remove old vote contribution, apply new one
+      const oldV = existing.value;
+      // confidence = (sum of all votes) / n.votes
+      // new sum = old_sum - oldV + v = confidence*votes - oldV + v
+      n.confidence = (n.confidence * n.votes - oldV + v) / n.votes;
+      existing.value = v;
+      existing.timestamp = Date.now();
+    } else {
+      n.confidence = ((n.confidence * n.votes) + v) / (n.votes + 1);
+      n.votes++;
+      state.votes.push({targetId:n.id, user, value:v, timestamp:Date.now()});
+    }
     saveState();
+    $('#voteNotice').textContent = existing
+      ? `Vote updated to ${v}/5. New confidence: ${n.confidence.toFixed(1)}.`
+      : `Vote recorded (${v}/5). Confidence: ${n.confidence.toFixed(1)}.`;
+    $('#voteNotice').classList.remove('hidden');
     renderStats();
     renderDetail();
     renderGraph();
@@ -435,7 +439,6 @@
     renderStats(); renderGraph();
   });
 
-  // Add source
   $('#cancelSource').addEventListener('click',()=>$('#addSourceDetails').removeAttribute('open'));
   $('#sourceForm').addEventListener('submit', e=>{
     e.preventDefault();
