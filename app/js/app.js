@@ -49,6 +49,33 @@
     $('#statQueue').textContent = queueItems().length;
   }
 
+  /**
+   * Return all DIRECT neighbours of `id`, regardless of link direction.
+   * Outgoing: n.links[].to
+   * Incoming: any node m where m.links[].to === id
+   * Returns unique {node, kind} pairs (kind from the edge).
+   */
+  function getNeighbours(id){
+    const seen = new Set();
+    const result = [];
+    // Outgoing
+    const n = byId(id);
+    if(n){
+      (n.links||[]).forEach(l=>{
+        const nb = byId(l.to);
+        if(nb && !seen.has(nb.id)){ seen.add(nb.id); result.push({node:nb, kind:l.kind}); }
+      });
+    }
+    // Incoming
+    state.nodes.forEach(m=>{
+      if(m.id===id) return;
+      (m.links||[]).forEach(l=>{
+        if(l.to===id && !seen.has(m.id)){ seen.add(m.id); result.push({node:m, kind:l.kind}); }
+      });
+    });
+    return result;
+  }
+
   /* ── Node positions (smart placement) ───────────────────────── */
   const VW=900, VH=480;
   const MIN_DIST = 80;
@@ -118,20 +145,14 @@
     const f = state.linkedFilter;
     let visibleIds = null;   // null = show everything
     if(f && state.currentId){
-      const cur = byId(state.currentId);
-      if(cur){
-        // Direct neighbours that match the filter type
-        const neighbourIds = (cur.links||[])
-          .map(l=>l.to)
-          .filter(id=>{
-            const nb = byId(id);
-            if(!nb) return false;
-            if(f==='facts')    return nb.type==='fact'||nb.type==='claim';
-            if(f==='questions') return nb.type==='question';
-            return true;
-          });
-        visibleIds = new Set([state.currentId, ...neighbourIds]);
-      }
+      const neighbours = getNeighbours(state.currentId)
+        .filter(({node})=>{
+          if(f==='facts')     return node.type==='fact'||node.type==='claim';
+          if(f==='questions') return node.type==='question';
+          return true;
+        })
+        .map(({node})=>node.id);
+      visibleIds = new Set([state.currentId, ...neighbours]);
     }
 
     /* ── Edges (only between visible nodes) ─────────────────────── */
@@ -148,7 +169,7 @@
       });
     });
 
-    /* ── Nodes (only visible) ─────────────────────────────────── */
+    /* ── Nodes (only visible) ────────────────────────────────────── */
     let nodes = '';
     state.nodes.forEach(n=>{
       if(visibleIds && !visibleIds.has(n.id)) return;
@@ -174,9 +195,7 @@
     $$('.node').forEach(el=>el.addEventListener('click', e=>{
       e.stopPropagation();
       state.currentId = el.dataset.id;
-      saveState();
-      renderGraph();
-      renderDetail();
+      saveState(); renderGraph(); renderDetail();
     }));
     initPanZoom();
   }
@@ -284,30 +303,48 @@
     syncFilterButtons();
   }
 
+  /**
+   * Render the lower-left linked-nodes panel.
+   * Uses bidirectional neighbour lookup so reverse-linked nodes
+   * (e.g. a question whose links[] points TO this fact) are included.
+   * Default (no filter): shows all neighbours — facts AND questions.
+   * Filter active: restricts to the chosen type.
+   */
   function renderLinkedPanel(){
     const n = byId(state.currentId);
     if(!n){ $('#linkedFacts').innerHTML='<div class="item"><p>No node selected.</p></div>'; return; }
 
     const f = state.linkedFilter;
-    // Direct neighbours only — no transitivity
-    let linked = (n.links||[]).map(l=>byId(l.to)).filter(Boolean);
-    if(f==='facts')      linked = linked.filter(ln=>ln.type==='fact'||ln.type==='claim');
-    else if(f==='questions') linked = linked.filter(ln=>ln.type==='question');
+    let neighbours = getNeighbours(n.id);
 
-    $('#lowerLeftTitle').textContent = f
-      ? `${f==='facts'?'Facts':'Questions'} directly linked to: ${short(n.title,40)}`
-      : 'Linked facts';
+    if(f==='facts')      neighbours = neighbours.filter(({node})=>node.type==='fact'||node.type==='claim');
+    else if(f==='questions') neighbours = neighbours.filter(({node})=>node.type==='question');
 
-    $('#linkedFacts').innerHTML = linked.length
-      ? linked.map(ln=>{
+    // Sort: facts/claims first, then questions
+    neighbours.sort((a,b)=>{
+      const rank = x => x.node.type==='question' ? 1 : 0;
+      return rank(a)-rank(b);
+    });
+
+    if(f==='facts')      $('#lowerLeftTitle').textContent = `Facts linked to: ${short(n.title,40)}`;
+    else if(f==='questions') $('#lowerLeftTitle').textContent = `Questions linked to: ${short(n.title,40)}`;
+    else                 $('#lowerLeftTitle').textContent = `Linked nodes`;
+
+    $('#linkedFacts').innerHTML = neighbours.length
+      ? neighbours.map(({node:ln, kind})=>{
           const lc = ln.status==='challenged'?'conflict':ln.type==='question'?'question':ln.status==='pending'?'pending':'support';
+          const kindLabel = kind==='support'?'supports':kind==='conflict'?'conflicts':'depends';
           return `<div class="item clickable" data-navigate="${ln.id}">`
-            +`<div class="badges" style="margin-bottom:.25rem"><span class="badge ${lc}">${esc(ln.status)}</span><span class="badge">${esc(ln.type)}</span></div>`
+            +`<div class="badges" style="margin-bottom:.25rem">`
+            +`<span class="badge ${lc}">${esc(ln.type)}</span>`
+            +`<span class="badge">${esc(ln.status)}</span>`
+            +`<span class="badge">${esc(kindLabel)}</span>`
+            +`</div>`
             +`<h4>${esc(ln.title)}</h4><p>${esc(ln.summary)}</p>`
             +`<small>Click to select &rarr; ${ln.id}</small>`
             +`</div>`;
         }).join('')
-      : `<div class="item"><p>${f?'No '+f+' directly linked to this node.':'No linked facts.'}</p></div>`;
+      : `<div class="item"><p>${f?'No '+f+' linked to this node.':'No linked nodes.'}</p></div>`;
 
     $$('[data-navigate]').forEach(el=>el.addEventListener('click',()=>{
       state.currentId = el.dataset.navigate;
