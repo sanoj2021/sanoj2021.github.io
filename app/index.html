@@ -43,8 +43,17 @@
         </div>
         <div class="graph-layout" id="mainLayout">
           <article class="card graph-card" id="graphPanel">
-            <div class="section-title" id="graphPanelTitle">Graph view &mdash; click a node to inspect</div>
-            <div class="graph-canvas"><svg id="graphSvg" aria-label="Fact graph"></svg></div>
+            <div class="graph-card-header">
+              <span class="section-title" id="graphPanelTitle">Graph view &mdash; drag to pan, scroll to zoom</span>
+              <div class="zoom-controls">
+                <button class="iconbtn sm" id="zoomIn" aria-label="Zoom in">+</button>
+                <button class="iconbtn sm" id="zoomOut" aria-label="Zoom out">&minus;</button>
+                <button class="btn sm" id="zoomReset">Reset</button>
+              </div>
+            </div>
+            <div class="graph-canvas" id="graphCanvas">
+              <svg id="graphSvg" aria-label="Fact graph"></svg>
+            </div>
             <div class="legend"><span class="leg support">&#x2192; supports</span><span class="leg depend">- - depends</span><span class="leg conflict">&#x2192; conflicts</span></div>
           </article>
           <aside class="card panel" id="detailPanel">
@@ -65,7 +74,37 @@
         </div>
         <div class="graph-layout" id="lowerLayout">
           <section class="card panel"><div class="section-title" id="lowerLeftTitle">Linked facts</div><div class="list" id="linkedFacts"></div></section>
-          <section class="card panel"><div class="section-title">Sources</div><div class="list" id="sources"></div></section>
+          <section class="card panel" id="sourcesPanel">
+            <div class="section-title">Sources</div>
+            <div class="list" id="sources"></div>
+            <details class="add-source-details" id="addSourceDetails">
+              <summary class="btn sm" style="margin-top:.75rem;list-style:none;display:inline-flex;align-items:center;gap:.35rem;">&#43; Add source</summary>
+              <form id="sourceForm" class="source-form">
+                <label for="srcTitle">Title / URL</label>
+                <input id="srcTitle" required placeholder="Paper title, book chapter, or URL" />
+                <label for="srcKind">Type</label>
+                <select id="srcKind">
+                  <option value="paper">Paper</option>
+                  <option value="textbook">Textbook</option>
+                  <option value="web">Web</option>
+                  <option value="discussion">Discussion</option>
+                </select>
+                <label for="srcQuality">Quality assessment</label>
+                <select id="srcQuality">
+                  <option value="high">High</option>
+                  <option value="mixed">Mixed</option>
+                  <option value="low">Low</option>
+                </select>
+                <label for="srcNote">Note</label>
+                <textarea id="srcNote" rows="2" placeholder="Brief note on relevance."></textarea>
+                <div class="actions" style="margin-top:.6rem">
+                  <button type="submit" class="btn primary sm">Attach source</button>
+                  <button type="button" class="btn sm" id="cancelSource">Cancel</button>
+                </div>
+                <div class="notice hidden" id="sourceNotice"></div>
+              </form>
+            </details>
+          </section>
         </div>
       </section>
     </main>
