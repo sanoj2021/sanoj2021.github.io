@@ -15,8 +15,6 @@
       <div class="brand"><div class="brand-name">ScienceDB</div><span class="pill">alpha</span></div>
       <nav class="nav" id="navLinks">
         <a href="#graph" data-view="graph" class="active">Graph</a>
-        <a href="#facts" data-view="facts">Facts</a>
-        <a href="#questions" data-view="questions">Questions</a>
         <a href="#queue" data-view="queue">Queue</a>
       </nav>
       <div class="sidebar-footer">
@@ -50,6 +48,12 @@
                 <button class="iconbtn sm" id="zoomOut" aria-label="Zoom out">&minus;</button>
                 <button class="btn sm" id="zoomReset">Reset</button>
               </div>
+            </div>
+            <!-- Filter toggles: show only facts / questions linked to selected node -->
+            <div class="graph-filters" id="graphFilters">
+              <button class="filter-pill" id="filterFacts" aria-pressed="false">Facts only</button>
+              <button class="filter-pill" id="filterQuestions" aria-pressed="false">Questions only</button>
+              <span class="filter-hint" id="filterHint"></span>
             </div>
             <div class="graph-canvas" id="graphCanvas">
               <svg id="graphSvg" aria-label="Fact graph"></svg>
