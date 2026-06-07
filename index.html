@@ -23,6 +23,7 @@
     input{width:100%;padding:.85rem 1rem;border-radius:.75rem;border:1px solid var(--border);background:var(--surface2);color:var(--text);margin-bottom:1rem}
     .btn{width:100%;padding:.95rem 1rem;border:none;border-radius:.8rem;background:var(--primary);color:white;font-weight:700}
     .btn:hover{background:var(--primary-hover)}
+    .btn:disabled{opacity:.55;cursor:not-allowed}
     .err{display:none;color:var(--error);font-size:.85rem;margin-top:.75rem}
     .err.show{display:block}
     .head{position:fixed;top:0;left:0;right:0;padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center;z-index:10}
@@ -41,31 +42,63 @@
       <h1 class="title">Login to ScienceDB</h1>
       <p class="sub">Atomic facts, linked evidence, and crowd-driven credibility.</p>
       <form id="loginForm">
-        <label for="username">Username</label>
-        <input id="username" autocomplete="username" required />
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="email" required />
         <label for="password">Password</label>
         <input id="password" type="password" autocomplete="current-password" required />
-        <button class="btn" type="submit">Enter app</button>
-        <div class="err" id="err">Incorrect username or password.</div>
+        <button class="btn" type="submit" id="submitBtn">Enter app</button>
+        <div class="err" id="err">Incorrect email or password.</div>
       </form>
     </section>
   </main>
+
+  <!-- Supabase client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script>
-    const USERS=[{username:'mrNobody',password:'NdQUQbCMHXbheY5skllU'}];
-    const root=document.documentElement;
-    let theme=root.getAttribute('data-theme')||'dark';
-    document.getElementById('themeBtn').onclick=()=>{
-      theme=theme==='dark'?'light':'dark';
-      root.setAttribute('data-theme',theme);
+    window.APP_CONFIG = {
+      supabaseUrl: 'https://teatreestudio.hopto.org',
+      supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgwMDQ1Njg3LCJleHAiOjE5Mzc3MjU2ODd9.fuVcREAF9-_0IZ8sUa71cpZh91BsanKgMlVcKqBk5B4'
     };
-    document.getElementById('loginForm').addEventListener('submit',e=>{
-      e.preventDefault();
-      const u=document.getElementById('username').value.trim();
-      const p=document.getElementById('password').value;
-      const ok=USERS.some(x=>x.username===u&&x.password===p);
-      if(ok){sessionStorage.setItem('scienceDbUser',u);window.location.href='./app/';}
-      else{document.getElementById('err').classList.add('show');}
-    });
+
+    (function () {
+      const { createClient } = supabase;
+      const sb = createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabaseAnonKey);
+
+      const root = document.documentElement;
+      let theme = root.getAttribute('data-theme') || 'dark';
+      document.getElementById('themeBtn').onclick = () => {
+        theme = theme === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', theme);
+      };
+
+      // If already logged in, skip the login screen
+      sb.auth.getSession().then(({ data: { session } }) => {
+        if (session) window.location.href = './app/';
+      });
+
+      document.getElementById('loginForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const btn = document.getElementById('submitBtn');
+        const errEl = document.getElementById('err');
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+
+        btn.disabled = true;
+        btn.textContent = 'Signing in…';
+        errEl.classList.remove('show');
+
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+
+        if (error) {
+          errEl.textContent = error.message || 'Incorrect email or password.';
+          errEl.classList.add('show');
+          btn.disabled = false;
+          btn.textContent = 'Enter app';
+        } else {
+          window.location.href = './app/';
+        }
+      });
+    })();
   </script>
 </body>
 </html>
