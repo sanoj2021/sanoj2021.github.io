@@ -19,10 +19,6 @@
         <a href="#graph" data-view="graph" class="active">Graph</a>
         <a href="#queue" data-view="queue">Queue</a>
       </nav>
-      <div class="sidebar-footer">
-        <div class="pill">User: <span id="usernameLabel"></span></div>
-        <button class="btn-ghost" id="logoutBtn">Logout</button>
-      </div>
     </aside>
     <main class="main">
       <header class="topbar">
@@ -31,8 +27,9 @@
           <div class="topbar-sub" id="viewSub">Atomic facts, linked evidence, crowd review</div>
         </div>
         <div class="top-actions">
-          <button class="btn" id="addFactBtn">+ Add fact</button>
           <button class="iconbtn" id="themeBtn" aria-label="Switch to light mode"></button>
+          <span class="topbar-user pill" id="usernameLabel"></span>
+          <button class="btn-ghost" id="logoutBtn">Logout</button>
         </div>
       </header>
       <section class="content">
@@ -57,6 +54,8 @@
               <span class="filter-hint" id="filterHint"></span>
             </div>
             <div class="graph-canvas" id="graphCanvas">
+              <!-- Add fact button overlaid in top-left of canvas -->
+              <button class="btn graph-add-btn" id="addFactBtn">+ Add fact</button>
               <svg id="graphSvg" aria-label="Fact graph"></svg>
             </div>
             <div class="legend"><span class="leg support">&#x2192; supports</span><span class="leg depend">- - depends</span><span class="leg conflict">&#x2192; conflicts</span></div>
