@@ -9,7 +9,7 @@
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-  const short = (s, n) => String(s || '').length > n ? String(s).slice(0, n - 1) + '…' : String(s || '');
+  const short = (s, n) => String(s || '').length > n ? String(s).slice(0, n - 1) + '\u2026' : String(s || '');
 
   const VW = 900, VH = 480;
   const BASE_POS = {f1:[280,175],f2:[490,95],f3:[510,275],f4:[740,120],f5:[755,305],f6:[235,340]};
@@ -31,6 +31,22 @@
     view: 'graph',
     linkedFilter: null
   };
+
+  // ── Theme toggle ────────────────────────────────────────────────
+  const ICONS = { dark: '&#9790;', light: '&#9728;' };
+  let theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    const btn = $('#themeBtn');
+    if (btn) {
+      btn.innerHTML = ICONS[t];
+      btn.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+    }
+  }
+
+  applyTheme(theme);
+  // ────────────────────────────────────────────────────────────────
 
   async function init() {
     await requireAuth();
@@ -351,7 +367,7 @@
               <span class="badge">${esc(kindLabel)}</span>
             </div>
             <h4>${esc(ln.title)}</h4><p>${esc(ln.summary)}</p>
-            <small>Click to select → ${ln.id}</small>
+            <small>Click to select \u2192 ${ln.id}</small>
           </div>`;
         }).join('')
       : `<div class="item"><p>${f ? 'No ' + f + ' linked to this node.' : 'No linked nodes.'}</p></div>`;
@@ -369,7 +385,7 @@
       ? srcs.map(s => `<div class="item">
           <h4>${esc(s.title)}</h4>
           <p>${esc(s.note)}</p>
-          <small>${esc(s.kind)} · quality: ${esc(s.quality)}</small>
+          <small>${esc(s.kind)} \u00b7 quality: ${esc(s.quality)}</small>
           <div class="source-actions">
             <button class="btn" data-sid="${s.id}" data-action="irrelevant">Challenge: irrelevant</button>
             <button class="btn error" data-sid="${s.id}" data-action="false">Challenge: false</button>
@@ -389,7 +405,7 @@
           return `<div class="item">
             <h4>${esc(item.title || item.reason || item.id)}</h4>
             <p>${esc(item.summary || item.reason || '')}</p>
-            <small>${esc(item.target_type || 'submission')} · ${esc(item.status || 'pending')} · ${ts}</small>
+            <small>${esc(item.target_type || 'submission')} \u00b7 ${esc(item.status || 'pending')} \u00b7 ${ts}</small>
           </div>`;
         }).join('')
       : '<div class="item"><p>Queue is empty.</p></div>';
@@ -590,6 +606,12 @@
   }
 
   function bindUI() {
+    // Theme toggle
+    $('#themeBtn').addEventListener('click', () => {
+      theme = theme === 'dark' ? 'light' : 'dark';
+      applyTheme(theme);
+    });
+
     $('#logoutBtn').addEventListener('click', async () => {
       await sb.auth.signOut();
       window.location.href = '../';

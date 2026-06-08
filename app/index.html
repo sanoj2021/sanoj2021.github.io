@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ScienceDB — Graph</title>
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="shortcut icon" href="../favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300..700&display=swap" rel="stylesheet">
@@ -30,7 +32,7 @@
         </div>
         <div class="top-actions">
           <button class="btn" id="addFactBtn">+ Add fact</button>
-          <button class="iconbtn" id="themeBtn" aria-label="Toggle theme">&#9680;</button>
+          <button class="iconbtn" id="themeBtn" aria-label="Switch to light mode"></button>
         </div>
       </header>
       <section class="content">
@@ -49,7 +51,6 @@
                 <button class="btn sm" id="zoomReset">Reset</button>
               </div>
             </div>
-            <!-- Filter toggles: show only facts / questions linked to selected node -->
             <div class="graph-filters" id="graphFilters">
               <button class="filter-pill" id="filterFacts" aria-pressed="false">Facts only</button>
               <button class="filter-pill" id="filterQuestions" aria-pressed="false">Questions only</button>
@@ -164,17 +165,13 @@
     </div>
   </div>
 
-  <!-- Supabase client library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-
-  <!-- App config -->
   <script>
     window.APP_CONFIG = {
       supabaseUrl: 'https://teatreestudio.hopto.org',
       supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgwMDQ1Njg3LCJleHAiOjE5Mzc3MjU2ODd9.fuVcREAF9-_0IZ8sUa71cpZh91BsanKgMlVcKqBk5B4'
     };
   </script>
-
   <script src="./js/data.js"></script>
   <script src="./js/app.js"></script>
 </body>
