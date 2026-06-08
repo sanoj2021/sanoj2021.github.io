@@ -32,26 +32,30 @@
     linkedFilter: null
   };
 
-  // ── Theme toggle ────────────────────────────────────────────────
-  const ICONS = { dark: '&#9790;', light: '&#9728;' };
-  let theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  // ── Theme ────────────────────────────────────────────────────────
+  // Read what the HTML already has (set via data-theme="dark" in the markup).
+  // Never derive from prefers-color-scheme here — that would overwrite the
+  // explicit HTML attribute and break the initial state.
+  const ICONS = { dark: '☾', light: '☀' };
+  let theme = document.documentElement.getAttribute('data-theme') || 'dark';
 
   function applyTheme(t) {
+    theme = t;
     document.documentElement.setAttribute('data-theme', t);
     const btn = $('#themeBtn');
     if (btn) {
-      btn.innerHTML = ICONS[t];
+      btn.textContent = ICONS[t];
       btn.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
     }
   }
-
-  applyTheme(theme);
   // ────────────────────────────────────────────────────────────────
 
   async function init() {
     await requireAuth();
     await loadAll();
     bindUI();
+    // Sync button icon now that the DOM is ready and bindUI has run
+    applyTheme(theme);
     setView(state.view || 'graph');
   }
 
@@ -606,10 +610,8 @@
   }
 
   function bindUI() {
-    // Theme toggle
     $('#themeBtn').addEventListener('click', () => {
-      theme = theme === 'dark' ? 'light' : 'dark';
-      applyTheme(theme);
+      applyTheme(theme === 'dark' ? 'light' : 'dark');
     });
 
     $('#logoutBtn').addEventListener('click', async () => {
