@@ -42,6 +42,7 @@
             <div class="graph-card-header">
               <span class="section-title" id="graphPanelTitle">Graph view &mdash; drag to pan, scroll to zoom</span>
               <div class="zoom-controls">
+                <button class="btn sm" id="addFactBtn">+ Add fact</button>
                 <button class="iconbtn sm" id="zoomIn" aria-label="Zoom in">+</button>
                 <button class="iconbtn sm" id="zoomOut" aria-label="Zoom out">&minus;</button>
                 <button class="btn sm" id="zoomReset">Reset</button>
@@ -53,18 +54,16 @@
               <span class="filter-hint" id="filterHint"></span>
             </div>
             <div class="graph-canvas" id="graphCanvas">
-              <button class="btn graph-add-btn" id="addFactBtn">+ Add fact</button>
               <svg id="graphSvg" aria-label="Fact graph"></svg>
             </div>
             <div class="legend">
               <span class="leg support">&#x2192; supports</span>
               <span class="leg depend">- - depends</span>
               <span class="leg conflict">&#x2192; conflicts</span>
-              <span class="leg-color new-leg">&#9679; new (&lt;10 votes)</span>
-              <span class="leg-color growing-leg">&#9679; growing (10–99)</span>
-              <span class="leg-color accepted-leg">&#9679; accepted</span>
-              <span class="leg-color contested-leg">&#9679; contested</span>
-              <span class="leg-color rejected-leg">&#9679; rejected</span>
+              <span class="leg-color" style="color:#888">&#9679; new</span>
+              <span class="leg-color" style="color:var(--success,#437a22)">&#9679; accepted</span>
+              <span class="leg-color" style="color:var(--warn)">&#9679; contested</span>
+              <span class="leg-color" style="color:var(--error)">&#9679; rejected</span>
             </div>
           </article>
           <aside class="card panel" id="detailPanel">
@@ -81,7 +80,6 @@
               <button class="btn warn" id="factChallengeBtn">Challenge fact</button>
             </div>
             <div class="notice hidden" id="voteNotice"></div>
-            <!-- Challenge votes section, shown when node is challenged -->
             <div id="challengeVoteSection" class="hidden">
               <div class="section-title" style="margin:1rem 0 .45rem">&#9398; Active challenge</div>
               <p id="challengeReason" class="fact-summary" style="font-size:.85rem;opacity:.8"></p>
@@ -132,7 +130,6 @@
     </main>
   </div>
 
-  <!-- Challenge modal -->
   <div class="modal-backdrop" id="challengeModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal">
       <h3 id="modalTitle" class="modal-title">Challenge</h3>
@@ -157,7 +154,6 @@
     </div>
   </div>
 
-  <!-- Add fact modal -->
   <div class="modal-backdrop" id="factModal" role="dialog" aria-modal="true" aria-labelledby="factModalTitle">
     <div class="modal">
       <h3 id="factModalTitle" class="modal-title">Add fact</h3>
