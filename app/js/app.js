@@ -25,6 +25,8 @@
     nodeSources: [],
     votes: [],
     challenges: [],
+    reviewQueue: [],
+    statusHistory: [],
     submissions: [],
     positions: structuredClone(BASE_POS),
     currentId: 'f1',
@@ -33,9 +35,6 @@
   };
 
   // ── Theme ────────────────────────────────────────────────────────
-  // Read what the HTML already has (set via data-theme="dark" in the markup).
-  // Never derive from prefers-color-scheme here — that would overwrite the
-  // explicit HTML attribute and break the initial state.
   const ICONS = { dark: '☾', light: '☀' };
   let theme = document.documentElement.getAttribute('data-theme') || 'dark';
 
@@ -54,7 +53,6 @@
     await requireAuth();
     await loadAll();
     bindUI();
-    // Sync button icon now that the DOM is ready and bindUI has run
     applyTheme(theme);
     setView(state.view || 'graph');
   }
@@ -85,6 +83,7 @@
       nodeSourcesRes,
       votesRes,
       challengesRes,
+      reviewQueueRes,
       submissionsRes
     ] = await Promise.all([
       sb.from('nodes').select('*').order('created_at', { ascending: true }),
@@ -93,6 +92,7 @@
       sb.from('node_sources').select('*'),
       sb.from('votes').select('*'),
       sb.from('challenges').select('*').order('created_at', { ascending: false }),
+      sb.from('review_queue').select('*').order('created_at', { ascending: true }),
       sb.from('submissions').select('*').order('created_at', { ascending: false })
     ]);
 
@@ -113,6 +113,7 @@
     state.nodeSources = nodeSourcesRes.data || [];
     state.votes = votesRes.data || [];
     state.challenges = challengesRes.data || [];
+    state.reviewQueue = reviewQueueRes.data || [];
     state.submissions = submissionsRes.data || [];
 
     if (!byId(state.currentId) && state.nodes[0]) state.currentId = state.nodes[0].id;
@@ -125,10 +126,10 @@
   }
 
   function queueItems() {
-    return [
-      ...state.submissions,
-      ...state.challenges.filter(c => c.status === 'pending')
-    ];
+    // Use the live review_queue view as primary source; fall back to local submissions
+    const queueIds = new Set(state.reviewQueue.map(q => q.challenge_id));
+    const pendingSubs = state.submissions.filter(s => s.status === 'pending');
+    return [...state.reviewQueue, ...pendingSubs];
   }
 
   function userVoteFor(nodeId) {
@@ -400,21 +401,127 @@
     $$('[data-sid]').forEach(btn => btn.addEventListener('click', () => openChallenge(btn.dataset.sid, btn.dataset.action)));
   }
 
+  // ── Moderation queue ─────────────────────────────────────────────
   function renderQueue() {
-    const items = queueItems();
+    const queueItems = state.reviewQueue;
+    const pendingSubs = state.submissions.filter(s => s.status === 'pending');
+
     $('#lowerLeftTitle').textContent = 'Moderation queue';
-    $('#linkedFacts').innerHTML = items.length
-      ? items.map(item => {
-          const ts = item.created_at ? new Date(item.created_at).toLocaleString() : '';
-          return `<div class="item">
-            <h4>${esc(item.title || item.reason || item.id)}</h4>
-            <p>${esc(item.summary || item.reason || '')}</p>
-            <small>${esc(item.target_type || 'submission')} \u00b7 ${esc(item.status || 'pending')} \u00b7 ${ts}</small>
-          </div>`;
-        }).join('')
-      : '<div class="item"><p>Queue is empty.</p></div>';
+
+    let html = '';
+
+    if (queueItems.length) {
+      html += '<h5 style="padding:.5rem 1rem;opacity:.6;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em">Challenges</h5>';
+      html += queueItems.map(item => {
+        const ts = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+        const targetLabel = item.target_type === 'node'
+          ? (byId(item.target_id)?.title || item.target_id)
+          : (state.sources[item.target_id]?.title || item.target_id);
+        return `<div class="item" data-queue-id="${esc(item.challenge_id)}">
+          <div class="badges" style="margin-bottom:.35rem">
+            <span class="badge conflict">${esc(item.challenge_type || 'challenge')}</span>
+            <span class="badge">${esc(item.target_type)}</span>
+            <span class="badge">${esc(item.challenge_status)}</span>
+          </div>
+          <h4>${esc(short(targetLabel, 60))}</h4>
+          <p>${esc(item.reason || '')}</p>
+          <small>${ts}</small>
+          <div class="source-actions" style="margin-top:.5rem">
+            <button class="btn" data-resolve="${esc(item.challenge_id)}" data-target-id="${esc(item.target_id)}" data-target-type="${esc(item.target_type)}" data-verdict="rejected" data-entry-status="open">Dismiss</button>
+            <button class="btn error" data-resolve="${esc(item.challenge_id)}" data-target-id="${esc(item.target_id)}" data-target-type="${esc(item.target_type)}" data-verdict="upheld" data-entry-status="rejected">Uphold &amp; reject entry</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    if (pendingSubs.length) {
+      html += '<h5 style="padding:.5rem 1rem;opacity:.6;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em">Pending submissions</h5>';
+      html += pendingSubs.map(item => {
+        const ts = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+        return `<div class="item">
+          <div class="badges" style="margin-bottom:.35rem">
+            <span class="badge pending">submission</span>
+            <span class="badge">${esc(item.type || '')}</span>
+          </div>
+          <h4>${esc(item.title || item.id)}</h4>
+          <p>${esc(item.summary || '')}</p>
+          <small>${ts}</small>
+          <div class="source-actions" style="margin-top:.5rem">
+            <button class="btn" data-approve-sub="${esc(item.node_id)}">Approve</button>
+            <button class="btn error" data-reject-sub="${esc(item.node_id)}" data-sub-id="${esc(item.id)}">Reject</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    if (!html) html = '<div class="item"><p>Queue is empty.</p></div>';
+
+    $('#linkedFacts').innerHTML = html;
     $('#sources').innerHTML = '<div class="item"><p>Facts gain stable status automatically as community confidence votes accumulate.</p></div>';
+
+    // Bind resolve buttons
+    $$('[data-resolve]').forEach(btn => {
+      btn.addEventListener('click', () => resolveChallenge({
+        challengeId: btn.dataset.resolve,
+        targetId: btn.dataset.targetId,
+        targetType: btn.dataset.targetType,
+        verdict: btn.dataset.verdict,
+        newEntryStatus: btn.dataset.entryStatus
+      }));
+    });
+
+    // Bind approve/reject submission buttons
+    $$('[data-approve-sub]').forEach(btn => {
+      btn.addEventListener('click', () => approveSubmission(btn.dataset.approveSub));
+    });
+    $$('[data-reject-sub]').forEach(btn => {
+      btn.addEventListener('click', () => rejectSubmission(btn.dataset.rejectSub, btn.dataset.subId));
+    });
   }
+
+  async function resolveChallenge({ challengeId, targetId, targetType, verdict, newEntryStatus }) {
+    const { error: ce } = await sb
+      .from('challenges')
+      .update({
+        status: verdict,
+        resolved_at: new Date().toISOString()
+      })
+      .eq('id', challengeId);
+
+    if (ce) { alert('Error resolving challenge: ' + ce.message); return; }
+
+    const table = targetType === 'node' ? 'nodes' : 'sources';
+    const { error: ee } = await sb
+      .from(table)
+      .update({ status: newEntryStatus })
+      .eq('id', targetId);
+
+    if (ee) { alert('Error updating entry status: ' + ee.message); return; }
+
+    await loadAll();
+    renderQueue();
+    renderStats();
+    renderGraph();
+  }
+
+  async function approveSubmission(nodeId) {
+    await sb.from('nodes').update({ status: 'open' }).eq('id', nodeId);
+    await sb.from('submissions').update({ status: 'approved' }).eq('node_id', nodeId);
+    await loadAll();
+    renderQueue();
+    renderStats();
+    renderGraph();
+  }
+
+  async function rejectSubmission(nodeId, subId) {
+    await sb.from('submissions').update({ status: 'rejected' }).eq('id', subId);
+    await sb.from('nodes').update({ status: 'rejected' }).eq('id', nodeId);
+    await loadAll();
+    renderQueue();
+    renderStats();
+    renderGraph();
+  }
+  // ────────────────────────────────────────────────────────────────
 
   function setView(view) {
     state.view = view;
@@ -478,11 +585,14 @@
     const target = $('#targetInfo').value;
     const isSource = !!state.sources[target];
 
+    // target_type must be 'node' or 'source' to match DB schema and trigger
+    const targetType = isSource ? 'source' : 'node';
+
     const payload = {
       id: 'c' + Date.now(),
       target_id: target,
-      target_type: isSource ? 'source' : 'fact',
-      challenge_type: isSource ? $('#challengeType').value : 'fact',
+      target_type: targetType,
+      challenge_type: isSource ? $('#challengeType').value : 'dispute',
       reason: $('#challengeReason').value.trim(),
       user_id: currentUser.id,
       status: 'pending'
