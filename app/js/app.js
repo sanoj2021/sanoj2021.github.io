@@ -25,9 +25,9 @@
     nodeSources: [],
     votes: [],
     challenges: [],
-    reviewQueue: [],
-    statusHistory: [],
-    submissions: [],
+    challengeVotes: [],
+    nodeVoteSummary: [],
+    challengeVoteSummary: [],
     positions: structuredClone(BASE_POS),
     currentId: 'f1',
     view: 'graph',
@@ -35,7 +35,7 @@
   };
 
   // ── Theme ────────────────────────────────────────────────────────
-  const ICONS = { dark: '☾', light: '☀' };
+  const ICONS = { dark: '\u263e', light: '\u2600' };
   let theme = document.documentElement.getAttribute('data-theme') || 'dark';
 
   function applyTheme(t) {
@@ -46,6 +46,69 @@
       btn.textContent = ICONS[t];
       btn.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
     }
+  }
+
+  // ── Vote-ratio color logic ───────────────────────────────────────
+  // Returns { fill, dot, opacity } based on vote summary for a node
+  function nodeColors(nodeId) {
+    const summary = state.nodeVoteSummary.find(s => s.id === nodeId);
+    const node = byId(nodeId);
+    const total = summary ? Number(summary.total_votes) : 0;
+    const up    = summary ? Number(summary.up_votes)    : 0;
+    const down  = summary ? Number(summary.down_votes)  : 0;
+
+    // challenged overrides color signal but keeps it desaturated
+    const challenged = node?.status === 'challenged';
+
+    let fill, dot, opacity = 1;
+
+    if (total < 10) {
+      // new / barely voted — grey, semi-transparent
+      fill    = 'color-mix(in oklab, #888 18%, var(--surface2))';
+      dot     = '#888';
+      opacity = total < 1 ? 0.45 : 0.6;
+    } else if (total < 100) {
+      // growing — grey but more solid
+      fill    = 'color-mix(in oklab, #888 22%, var(--surface2))';
+      dot     = '#999';
+      opacity = 0.75;
+    } else {
+      const upPct   = up   / total;
+      const downPct = down / total;
+      if (upPct > 0.65) {
+        // accepted — green
+        fill = 'color-mix(in oklab,var(--success,#437a22) 18%,var(--surface2))';
+        dot  = 'var(--success,#437a22)';
+      } else if (downPct > 0.65) {
+        // rejected — red
+        fill = 'color-mix(in oklab,var(--error) 18%,var(--surface2))';
+        dot  = 'var(--error)';
+      } else {
+        // contested — yellow
+        fill = 'color-mix(in oklab,var(--warn) 18%,var(--surface2))';
+        dot  = 'var(--warn)';
+      }
+    }
+
+    if (challenged) {
+      // tint with error but keep base fill
+      fill = 'color-mix(in oklab,var(--error) 25%,var(--surface2))';
+      dot  = 'var(--error)';
+    }
+
+    return { fill, dot, opacity };
+  }
+
+  // Challenge overlay darkness: returns 0–1 (0=white overlay, 1=black overlay)
+  function challengeOverlayDarkness(nodeId) {
+    const node = byId(nodeId);
+    if (!node || node.status !== 'challenged') return null;
+    // find latest open challenge for this node
+    const ch = state.challenges.find(c => c.target_id === nodeId && c.target_type === 'node');
+    if (!ch) return null;
+    const cvs = state.challengeVoteSummary.find(s => s.challenge_id === ch.id);
+    if (!cvs || Number(cvs.total_votes) === 0) return 0.5; // neutral
+    return Number(cvs.valid_votes) / Number(cvs.total_votes);
   }
   // ────────────────────────────────────────────────────────────────
 
@@ -59,32 +122,18 @@
 
   async function requireAuth() {
     const { data: { session } } = await sb.auth.getSession();
-    if (!session) {
-      window.location.href = '../';
-      return;
-    }
+    if (!session) { window.location.href = '../'; return; }
     currentUser = session.user;
     $('#usernameLabel').textContent = currentUser.email || currentUser.user_metadata?.username || 'user';
-
-    const { data: p } = await sb
-      .from('profiles')
-      .select('*')
-      .eq('id', currentUser.id)
-      .maybeSingle();
-
+    const { data: p } = await sb.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
     profile = p || null;
   }
 
   async function loadAll() {
     const [
-      nodesRes,
-      linksRes,
-      sourcesRes,
-      nodeSourcesRes,
-      votesRes,
-      challengesRes,
-      reviewQueueRes,
-      submissionsRes
+      nodesRes, linksRes, sourcesRes, nodeSourcesRes,
+      votesRes, challengesRes, challengeVotesRes,
+      nodeVoteSummaryRes, challengeVoteSummaryRes
     ] = await Promise.all([
       sb.from('nodes').select('*').order('created_at', { ascending: true }),
       sb.from('links').select('*'),
@@ -92,81 +141,61 @@
       sb.from('node_sources').select('*'),
       sb.from('votes').select('*'),
       sb.from('challenges').select('*').order('created_at', { ascending: false }),
-      sb.from('review_queue').select('*').order('created_at', { ascending: true }),
-      sb.from('submissions').select('*').order('created_at', { ascending: false })
+      sb.from('challenge_votes').select('*'),
+      sb.from('node_vote_summary').select('*'),
+      sb.from('challenge_vote_summary').select('*')
     ]);
 
-    if (nodesRes.error) throw nodesRes.error;
-    if (linksRes.error) throw linksRes.error;
+    if (nodesRes.error)   throw nodesRes.error;
+    if (linksRes.error)   throw linksRes.error;
     if (sourcesRes.error) throw sourcesRes.error;
-    if (nodeSourcesRes.error) throw nodeSourcesRes.error;
-    if (votesRes.error) throw votesRes.error;
 
     state.nodes = (nodesRes.data || []).map(n => ({
       ...n,
       votes: n.votes_count,
       sources: (nodeSourcesRes.data || []).filter(ns => ns.node_id === n.id).map(ns => ns.source_id),
-      links: (linksRes.data || []).filter(l => l.from_id === n.id).map(l => ({ to: l.to_id, kind: l.kind }))
+      links:   (linksRes.data   || []).filter(l => l.from_id === n.id).map(l => ({ to: l.to_id, kind: l.kind }))
     }));
-    state.links = linksRes.data || [];
-    state.sources = Object.fromEntries((sourcesRes.data || []).map(s => [s.id, s]));
-    state.nodeSources = nodeSourcesRes.data || [];
-    state.votes = votesRes.data || [];
-    state.challenges = challengesRes.data || [];
-    state.reviewQueue = reviewQueueRes.data || [];
-    state.submissions = submissionsRes.data || [];
+    state.links                = linksRes.data || [];
+    state.sources              = Object.fromEntries((sourcesRes.data || []).map(s => [s.id, s]));
+    state.nodeSources          = nodeSourcesRes.data || [];
+    state.votes                = votesRes.data || [];
+    state.challenges           = challengesRes.data || [];
+    state.challengeVotes       = challengeVotesRes.data || [];
+    state.nodeVoteSummary      = nodeVoteSummaryRes.data || [];
+    state.challengeVoteSummary = challengeVoteSummaryRes.data || [];
 
     if (!byId(state.currentId) && state.nodes[0]) state.currentId = state.nodes[0].id;
-
     renderStats();
   }
 
-  function byId(id) {
-    return state.nodes.find(n => n.id === id);
-  }
-
-  function queueItems() {
-    // Use the live review_queue view as primary source; fall back to local submissions
-    const queueIds = new Set(state.reviewQueue.map(q => q.challenge_id));
-    const pendingSubs = state.submissions.filter(s => s.status === 'pending');
-    return [...state.reviewQueue, ...pendingSubs];
-  }
+  function byId(id) { return state.nodes.find(n => n.id === id); }
 
   function userVoteFor(nodeId) {
     return state.votes.find(v => v.node_id === nodeId && v.user_id === currentUser?.id);
   }
 
   function getNeighbours(id) {
-    const seen = new Set();
-    const result = [];
+    const seen = new Set(), result = [];
     const node = byId(id);
-
     if (node) {
       (node.links || []).forEach(l => {
         const nb = byId(l.to);
-        if (nb && !seen.has(nb.id)) {
-          seen.add(nb.id);
-          result.push({ node: nb, kind: l.kind });
-        }
+        if (nb && !seen.has(nb.id)) { seen.add(nb.id); result.push({ node: nb, kind: l.kind }); }
       });
     }
-
     state.nodes.forEach(m => {
       (m.links || []).forEach(l => {
-        if (l.to === id && !seen.has(m.id)) {
-          seen.add(m.id);
-          result.push({ node: m, kind: l.kind });
-        }
+        if (l.to === id && !seen.has(m.id)) { seen.add(m.id); result.push({ node: m, kind: l.kind }); }
       });
     });
-
     return result;
   }
 
   function renderStats() {
-    $('#statFacts').textContent = state.nodes.filter(n => n.type === 'fact').length;
+    $('#statFacts').textContent     = state.nodes.filter(n => n.type === 'fact' || n.type === 'claim').length;
     $('#statQuestions').textContent = state.nodes.filter(n => n.type === 'question').length;
-    $('#statQueue').textContent = queueItems().length;
+    $('#statQueue').textContent     = state.nodes.filter(n => n.status === 'challenged').length;
   }
 
   function posOf(id) {
@@ -213,9 +242,9 @@
       (n.links || []).forEach(l => {
         if (visibleIds && !visibleIds.has(l.to)) return;
         const [x1, y1] = posOf(n.id), [x2, y2] = posOf(l.to);
-        const mx = (x1 + x2) / 2;
+        const mx  = (x1 + x2) / 2;
         const cls = l.kind === 'support' ? 'support' : l.kind === 'conflict' ? 'conflict' : 'depend';
-        const mk = l.kind === 'support' ? 'url(#aS)' : l.kind === 'conflict' ? 'url(#aC)' : 'url(#aD)';
+        const mk  = l.kind === 'support' ? 'url(#aS)' : l.kind === 'conflict' ? 'url(#aC)' : 'url(#aD)';
         edges += `<path class="edge ${cls}" d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" marker-end="${mk}"/>`;
       });
     });
@@ -223,27 +252,27 @@
     let nodes = '';
     state.nodes.forEach(n => {
       if (visibleIds && !visibleIds.has(n.id)) return;
-      const [x, y] = posOf(n.id);
-      const active = n.id === state.currentId;
-      const r = active ? 34 : 26;
-      const fillOuter = n.status === 'challenged'
-        ? 'color-mix(in oklab,var(--error) 18%,var(--surface2))'
-        : n.type === 'question'
-          ? 'color-mix(in oklab,var(--warn) 15%,var(--surface2))'
-          : n.status === 'pending'
-            ? 'color-mix(in oklab,var(--warn) 15%,var(--surface2))'
-            : 'color-mix(in oklab,var(--primary) 15%,var(--surface2))';
-      const fillDot = n.status === 'challenged'
-        ? 'var(--error)'
-        : n.type === 'question'
-          ? 'var(--warn)'
-          : n.status === 'pending'
-            ? 'var(--warn)'
-            : 'var(--primary)';
+      const [x, y]  = posOf(n.id);
+      const active  = n.id === state.currentId;
+      const r       = active ? 34 : 26;
+      const { fill, dot, opacity } = nodeColors(n.id);
 
-      nodes += `<g class="node${active ? ' active-node' : ''}" data-id="${n.id}" role="button" aria-label="${esc(short(n.title,60))}">
-        <circle cx="${x}" cy="${y}" r="${r}" fill="${fillOuter}"/>
-        <circle cx="${x}" cy="${y}" r="7" fill="${fillDot}"/>
+      // Challenge overlay badge
+      let badge = '';
+      const darkness = challengeOverlayDarkness(n.id);
+      if (darkness !== null) {
+        const gray  = Math.round((1 - darkness) * 255);
+        const bfill = `rgb(${gray},${gray},${gray})`;
+        const bx    = x + r * 0.65;
+        const by    = y - r * 0.65;
+        badge = `<circle cx="${bx}" cy="${by}" r="9" fill="${bfill}" stroke="var(--surface2)" stroke-width="1.5"/>`
+              + `<text x="${bx}" y="${by + 4}" text-anchor="middle" font-size="9" fill="${darkness > 0.5 ? '#fff' : '#222'}" font-weight="bold">&#9398;</text>`;
+      }
+
+      nodes += `<g class="node${active ? ' active-node' : ''}" data-id="${n.id}" role="button" aria-label="${esc(short(n.title,60))}" style="opacity:${opacity}">
+        <circle cx="${x}" cy="${y}" r="${r}" fill="${fill}"/>
+        <circle cx="${x}" cy="${y}" r="7" fill="${dot}"/>
+        ${badge}
         <text x="${x}" y="${y + r + 16}" text-anchor="middle">${esc(short(n.title,38))}</text>
       </g>`;
     });
@@ -260,8 +289,8 @@
 
   function initPanZoom() {
     const canvas = $('#graphCanvas');
-    const svg = $('#graphSvg');
-    let dragging = false, startX = 0, startY = 0, startVx = 0, startVy = 0, lastDist = null;
+    const svg    = $('#graphSvg');
+    let dragging = false, startX = 0, startY = 0, startVx = 0, startVy = 0;
 
     canvas.onpointerdown = e => {
       if (e.target.closest('.node')) return;
@@ -275,15 +304,14 @@
       vy = startVy + (e.clientY - startY) * (VH / rect.height);
       clampTransform(); applyTransform();
     };
-    canvas.onpointerup = canvas.onpointercancel = () => { dragging = false; lastDist = null; };
-
+    canvas.onpointerup = canvas.onpointercancel = () => { dragging = false; };
     canvas.onwheel = e => {
       e.preventDefault();
-      const rect = svg.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) * (VW / rect.width);
-      const my = (e.clientY - rect.top) * (VH / rect.height);
+      const rect   = svg.getBoundingClientRect();
+      const mx     = (e.clientX - rect.left) * (VW / rect.width);
+      const my     = (e.clientY - rect.top)  * (VH / rect.height);
       const factor = e.deltaY < 0 ? 1.06 : 0.94;
-      const ns = Math.min(4, Math.max(0.25, vscale * factor));
+      const ns     = Math.min(4, Math.max(0.25, vscale * factor));
       vx = mx - (mx - vx) * (ns / vscale);
       vy = my - (my - vy) * (ns / vscale);
       vscale = ns;
@@ -301,7 +329,7 @@
 
   function syncFilterButtons() {
     const f = state.linkedFilter;
-    $('#filterFacts').setAttribute('aria-pressed', f === 'facts' ? 'true' : 'false');
+    $('#filterFacts').setAttribute('aria-pressed',     f === 'facts'     ? 'true' : 'false');
     $('#filterQuestions').setAttribute('aria-pressed', f === 'questions' ? 'true' : 'false');
     $('#filterHint').textContent = f ? `Showing only ${f} directly linked to selected node` : '';
   }
@@ -311,59 +339,148 @@
     if (!n) return;
     state.currentId = n.id;
 
-    $('#factTitle').textContent = n.title;
+    $('#factTitle').textContent   = n.title;
     $('#factSummary').textContent = n.summary;
 
     const existingVote = userVoteFor(n.id);
-    const sliderVal = existingVote ? existingVote.value : Math.round(n.confidence);
+    const sliderVal    = existingVote ? existingVote.value : Math.round(n.confidence);
     $('#confidenceValue').textContent = sliderVal;
-    $('#voteRange').value = sliderVal;
+    $('#voteRange').value              = sliderVal;
 
     $('#voteBtn').disabled = false;
     if (existingVote) {
-      $('#voteBtn').textContent = 'Update vote';
-      $('#voteNotice').textContent = `Your current vote: ${existingVote.value}/5. Move the slider to change it.`;
+      $('#voteBtn').textContent           = 'Update vote';
+      $('#voteNotice').textContent        = `Your current vote: ${existingVote.value}/5. Move the slider to change it.`;
       $('#voteNotice').classList.remove('hidden');
     } else {
       $('#voteBtn').textContent = 'Vote';
       $('#voteNotice').classList.add('hidden');
     }
 
-    const cls = n.status === 'challenged' ? 'conflict' : n.type === 'question' ? 'question' : n.status === 'pending' ? 'pending' : 'support';
-    $('#factMeta').innerHTML =
-      `<span class="badge ${cls}">${esc(n.status)}</span>` +
-      `<span class="badge">${esc(n.type)}</span>` +
-      `<span class="badge">${n.votes} votes</span>` +
-      `<span class="badge">confidence: ${Number(n.confidence).toFixed(1)}</span>`;
+    // Vote-ratio badge in meta
+    const summary  = state.nodeVoteSummary.find(s => s.id === n.id);
+    const total    = summary ? Number(summary.total_votes) : 0;
+    const up       = summary ? Number(summary.up_votes)    : 0;
+    const down     = summary ? Number(summary.down_votes)  : 0;
+    const statusCls = n.status === 'challenged' ? 'conflict'
+                    : n.type === 'question'     ? 'question'
+                    : n.status === 'new'        ? 'pending'
+                    : 'support';
+    const voteLabel = total === 0 ? 'no votes yet'
+                    : total < 10 ? `${total} votes (new)`
+                    : total < 100 ? `${total} votes (growing)`
+                    : up / total > 0.65 ? `${total} votes \u2714 accepted`
+                    : down / total > 0.65 ? `${total} votes \u2716 rejected`
+                    : `${total} votes \u007e contested`;
 
+    $('#factMeta').innerHTML =
+      `<span class="badge ${statusCls}">${esc(n.status)}</span>` +
+      `<span class="badge">${esc(n.type)}</span>` +
+      `<span class="badge">${voteLabel}</span>` +
+      `<span class="badge">avg: ${Number(summary?.avg_confidence ?? n.confidence).toFixed(1)}</span>`;
+
+    // Challenge vote section
+    renderChallengeVoteSection(n);
     renderLinkedPanel();
     renderSources(n);
     syncFilterButtons();
   }
 
-  function renderLinkedPanel() {
-    const n = byId(state.currentId);
-    if (!n) {
-      $('#linkedFacts').innerHTML = '<div class="item"><p>No node selected.</p></div>';
+  function renderChallengeVoteSection(n) {
+    const section = $('#challengeVoteSection');
+    if (n.status !== 'challenged') {
+      section.classList.add('hidden');
       return;
     }
+    const ch = state.challenges.find(c => c.target_id === n.id && c.target_type === 'node');
+    if (!ch) { section.classList.add('hidden'); return; }
+
+    const cvs       = state.challengeVoteSummary.find(s => s.challenge_id === ch.id);
+    const total     = cvs ? Number(cvs.total_votes)   : 0;
+    const valid     = cvs ? Number(cvs.valid_votes)   : 0;
+    const invalid   = cvs ? Number(cvs.invalid_votes) : 0;
+    const userCv    = state.challengeVotes.find(cv => cv.challenge_id === ch.id && cv.user_id === currentUser?.id);
+
+    $('#challengeReason').textContent = ch.reason || '(no reason given)';
+
+    const barHtml = total === 0
+      ? '<span style="opacity:.5">No votes yet on this challenge.</span>'
+      : `<div class="cv-bar-wrap">
+           <div class="cv-bar-valid"   style="width:${Math.round(valid/total*100)}%">${valid} valid</div>
+           <div class="cv-bar-invalid" style="width:${Math.round(invalid/total*100)}%">${invalid} no problem</div>
+         </div>
+         <small style="opacity:.6">${total} total votes</small>`;
+    $('#challengeVoteBar').innerHTML = barHtml;
+
+    const validBtn   = $('#cvValid');
+    const invalidBtn = $('#cvInvalid');
+    if (userCv) {
+      validBtn.textContent   = userCv.is_valid ? '\u2714 You said: valid' : '\u2714 Valid concern';
+      invalidBtn.textContent = !userCv.is_valid ? '\u2714 You said: no problem' : '\u2717 No problem';
+    } else {
+      validBtn.textContent   = '\u2714 Valid concern';
+      invalidBtn.textContent = '\u2717 No problem';
+    }
+
+    section.classList.remove('hidden');
+
+    // Re-bind to avoid duplicate listeners
+    const newValid   = validBtn.cloneNode(true);
+    const newInvalid = invalidBtn.cloneNode(true);
+    validBtn.parentNode.replaceChild(newValid, validBtn);
+    invalidBtn.parentNode.replaceChild(newInvalid, invalidBtn);
+    newValid.addEventListener('click',   () => submitChallengeVote(ch.id, true));
+    newInvalid.addEventListener('click', () => submitChallengeVote(ch.id, false));
+  }
+
+  async function submitChallengeVote(challengeId, isValid) {
+    const notice = $('#challengeVoteNotice');
+    const existing = state.challengeVotes.find(
+      cv => cv.challenge_id === challengeId && cv.user_id === currentUser?.id
+    );
+
+    let error;
+    if (existing) {
+      ({ error } = await sb.from('challenge_votes')
+        .update({ is_valid: isValid })
+        .eq('id', existing.id));
+    } else {
+      ({ error } = await sb.from('challenge_votes').insert({
+        challenge_id: challengeId,
+        user_id:      currentUser.id,
+        is_valid:     isValid
+      }));
+    }
+
+    if (error) {
+      notice.textContent = error.message;
+      notice.classList.remove('hidden');
+      return;
+    }
+    notice.classList.add('hidden');
+    await loadAll();
+    renderGraph();
+    renderDetail();
+  }
+
+  function renderLinkedPanel() {
+    const n = byId(state.currentId);
+    if (!n) { $('#linkedFacts').innerHTML = '<div class="item"><p>No node selected.</p></div>'; return; }
 
     const f = state.linkedFilter;
     let neighbours = getNeighbours(n.id);
-
-    if (f === 'facts') neighbours = neighbours.filter(({ node }) => node.type === 'fact' || node.type === 'claim');
+    if (f === 'facts')     neighbours = neighbours.filter(({ node }) => node.type === 'fact' || node.type === 'claim');
     else if (f === 'questions') neighbours = neighbours.filter(({ node }) => node.type === 'question');
-
     neighbours.sort((a, b) => (a.node.type === 'question') - (b.node.type === 'question'));
 
     $('#lowerLeftTitle').textContent =
-      f === 'facts' ? `Facts linked to: ${short(n.title, 40)}`
+      f === 'facts'     ? `Facts linked to: ${short(n.title, 40)}`
       : f === 'questions' ? `Questions linked to: ${short(n.title, 40)}`
       : 'Linked nodes';
 
     $('#linkedFacts').innerHTML = neighbours.length
       ? neighbours.map(({ node: ln, kind }) => {
-          const lc = ln.status === 'challenged' ? 'conflict' : ln.type === 'question' ? 'question' : ln.status === 'pending' ? 'pending' : 'support';
+          const lc        = ln.status === 'challenged' ? 'conflict' : ln.type === 'question' ? 'question' : ln.status === 'new' ? 'pending' : 'support';
           const kindLabel = kind === 'support' ? 'supports' : kind === 'conflict' ? 'conflicts' : 'depends';
           return `<div class="item clickable" data-navigate="${ln.id}">
             <div class="badges" style="margin-bottom:.25rem">
@@ -397,163 +514,36 @@
           </div>
         </div>`).join('')
       : '<div class="item"><p>No sources attached yet.</p></div>';
-
     $$('[data-sid]').forEach(btn => btn.addEventListener('click', () => openChallenge(btn.dataset.sid, btn.dataset.action)));
   }
-
-  // ── Moderation queue ─────────────────────────────────────────────
-  function renderQueue() {
-    const queueItems = state.reviewQueue;
-    const pendingSubs = state.submissions.filter(s => s.status === 'pending');
-
-    $('#lowerLeftTitle').textContent = 'Moderation queue';
-
-    let html = '';
-
-    if (queueItems.length) {
-      html += '<h5 style="padding:.5rem 1rem;opacity:.6;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em">Challenges</h5>';
-      html += queueItems.map(item => {
-        const ts = item.created_at ? new Date(item.created_at).toLocaleString() : '';
-        const targetLabel = item.target_type === 'node'
-          ? (byId(item.target_id)?.title || item.target_id)
-          : (state.sources[item.target_id]?.title || item.target_id);
-        return `<div class="item" data-queue-id="${esc(item.challenge_id)}">
-          <div class="badges" style="margin-bottom:.35rem">
-            <span class="badge conflict">${esc(item.challenge_type || 'challenge')}</span>
-            <span class="badge">${esc(item.target_type)}</span>
-            <span class="badge">${esc(item.challenge_status)}</span>
-          </div>
-          <h4>${esc(short(targetLabel, 60))}</h4>
-          <p>${esc(item.reason || '')}</p>
-          <small>${ts}</small>
-          <div class="source-actions" style="margin-top:.5rem">
-            <button class="btn" data-resolve="${esc(item.challenge_id)}" data-target-id="${esc(item.target_id)}" data-target-type="${esc(item.target_type)}" data-verdict="rejected" data-entry-status="open">Dismiss</button>
-            <button class="btn error" data-resolve="${esc(item.challenge_id)}" data-target-id="${esc(item.target_id)}" data-target-type="${esc(item.target_type)}" data-verdict="upheld" data-entry-status="rejected">Uphold &amp; reject entry</button>
-          </div>
-        </div>`;
-      }).join('');
-    }
-
-    if (pendingSubs.length) {
-      html += '<h5 style="padding:.5rem 1rem;opacity:.6;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em">Pending submissions</h5>';
-      html += pendingSubs.map(item => {
-        const ts = item.created_at ? new Date(item.created_at).toLocaleString() : '';
-        return `<div class="item">
-          <div class="badges" style="margin-bottom:.35rem">
-            <span class="badge pending">submission</span>
-            <span class="badge">${esc(item.type || '')}</span>
-          </div>
-          <h4>${esc(item.title || item.id)}</h4>
-          <p>${esc(item.summary || '')}</p>
-          <small>${ts}</small>
-          <div class="source-actions" style="margin-top:.5rem">
-            <button class="btn" data-approve-sub="${esc(item.node_id)}">Approve</button>
-            <button class="btn error" data-reject-sub="${esc(item.node_id)}" data-sub-id="${esc(item.id)}">Reject</button>
-          </div>
-        </div>`;
-      }).join('');
-    }
-
-    if (!html) html = '<div class="item"><p>Queue is empty.</p></div>';
-
-    $('#linkedFacts').innerHTML = html;
-    $('#sources').innerHTML = '<div class="item"><p>Facts gain stable status automatically as community confidence votes accumulate.</p></div>';
-
-    // Bind resolve buttons
-    $$('[data-resolve]').forEach(btn => {
-      btn.addEventListener('click', () => resolveChallenge({
-        challengeId: btn.dataset.resolve,
-        targetId: btn.dataset.targetId,
-        targetType: btn.dataset.targetType,
-        verdict: btn.dataset.verdict,
-        newEntryStatus: btn.dataset.entryStatus
-      }));
-    });
-
-    // Bind approve/reject submission buttons
-    $$('[data-approve-sub]').forEach(btn => {
-      btn.addEventListener('click', () => approveSubmission(btn.dataset.approveSub));
-    });
-    $$('[data-reject-sub]').forEach(btn => {
-      btn.addEventListener('click', () => rejectSubmission(btn.dataset.rejectSub, btn.dataset.subId));
-    });
-  }
-
-  async function resolveChallenge({ challengeId, targetId, targetType, verdict, newEntryStatus }) {
-    const { error: ce } = await sb
-      .from('challenges')
-      .update({
-        status: verdict,
-        resolved_at: new Date().toISOString()
-      })
-      .eq('id', challengeId);
-
-    if (ce) { alert('Error resolving challenge: ' + ce.message); return; }
-
-    const table = targetType === 'node' ? 'nodes' : 'sources';
-    const { error: ee } = await sb
-      .from(table)
-      .update({ status: newEntryStatus })
-      .eq('id', targetId);
-
-    if (ee) { alert('Error updating entry status: ' + ee.message); return; }
-
-    await loadAll();
-    renderQueue();
-    renderStats();
-    renderGraph();
-  }
-
-  async function approveSubmission(nodeId) {
-    await sb.from('nodes').update({ status: 'open' }).eq('id', nodeId);
-    await sb.from('submissions').update({ status: 'approved' }).eq('node_id', nodeId);
-    await loadAll();
-    renderQueue();
-    renderStats();
-    renderGraph();
-  }
-
-  async function rejectSubmission(nodeId, subId) {
-    await sb.from('submissions').update({ status: 'rejected' }).eq('id', subId);
-    await sb.from('nodes').update({ status: 'rejected' }).eq('id', nodeId);
-    await loadAll();
-    renderQueue();
-    renderStats();
-    renderGraph();
-  }
-  // ────────────────────────────────────────────────────────────────
 
   function setView(view) {
     state.view = view;
     $$('[data-view]').forEach(a => a.classList.toggle('active', a.dataset.view === view));
-    const titles = { graph: 'Knowledge graph', queue: 'Moderation queue' };
-    const subs = { graph: 'Atomic facts, linked evidence, crowd review', queue: 'Pending submissions and challenges for review' };
+    const titles = { graph: 'Knowledge graph' };
+    const subs   = { graph: 'Atomic facts, linked evidence, crowd review' };
     $('#viewTitle').textContent = titles[view] || view;
-    $('#viewSub').textContent = subs[view] || '';
-    const isQueue = view === 'queue';
-    $('#graphPanel').classList.toggle('hidden', isQueue);
-    $('#detailPanel').classList.toggle('hidden', isQueue);
-    $('#sourcesPanel').classList.toggle('hidden', isQueue);
-    if (isQueue) renderQueue();
-    else { renderGraph(); renderDetail(); }
+    $('#viewSub').textContent   = subs[view]   || '';
+    renderGraph();
+    renderDetail();
     renderStats();
   }
 
   function openChallenge(targetId, mode) {
-    const src = state.sources[targetId];
+    const src      = state.sources[targetId];
     const isSource = !!src;
     $('#challengeTypeWrap').classList.toggle('hidden', !isSource);
     if (isSource) {
-      $('#modalTitle').textContent = mode === 'irrelevant' ? 'Challenge: source not relevant' : 'Challenge: source unreliable';
-      $('#modalIntro').textContent = `Source: "${src.title}"`;
-      $('#challengeType').value = mode;
+      $('#modalTitle').textContent  = mode === 'irrelevant' ? 'Challenge: source not relevant' : 'Challenge: source unreliable';
+      $('#modalIntro').textContent  = `Source: "${src.title}"`;
+      $('#challengeType').value     = mode;
     } else {
       const fact = byId(targetId);
       $('#modalTitle').textContent = 'Challenge fact';
       $('#modalIntro').textContent = fact ? `Fact: "${fact.title}"` : `ID: ${targetId}`;
     }
-    $('#targetInfo').value = targetId;
-    $('#challengeReason').value = '';
+    $('#targetInfo').value               = targetId;
+    $('#challengeReason').value          = '';
     $('#challengeNotice').classList.add('hidden');
     $('#challengeModal').classList.add('show');
   }
@@ -562,17 +552,12 @@
     const n = byId(state.currentId);
     if (!n) return;
     const value = parseInt($('#voteRange').value, 10);
-
-    const { error } = await sb.rpc('upsert_vote', {
-      p_node_id: n.id,
-      p_value: value
-    });
+    const { error } = await sb.rpc('upsert_vote', { p_node_id: n.id, p_value: value });
     if (error) {
       $('#voteNotice').textContent = error.message;
       $('#voteNotice').classList.remove('hidden');
       return;
     }
-
     await loadAll();
     $('#voteNotice').textContent = `Vote saved (${value}/5).`;
     $('#voteNotice').classList.remove('hidden');
@@ -582,20 +567,18 @@
 
   async function handleChallengeSubmit(e) {
     e.preventDefault();
-    const target = $('#targetInfo').value;
-    const isSource = !!state.sources[target];
-
-    // target_type must be 'node' or 'source' to match DB schema and trigger
+    const target    = $('#targetInfo').value;
+    const isSource  = !!state.sources[target];
     const targetType = isSource ? 'source' : 'node';
 
     const payload = {
-      id: 'c' + Date.now(),
-      target_id: target,
-      target_type: targetType,
+      id:             'c' + Date.now(),
+      target_id:      target,
+      target_type:    targetType,
       challenge_type: isSource ? $('#challengeType').value : 'dispute',
-      reason: $('#challengeReason').value.trim(),
-      user_id: currentUser.id,
-      status: 'pending'
+      reason:         $('#challengeReason').value.trim(),
+      user_id:        currentUser.id,
+      status:         'pending'
     };
 
     const { error } = await sb.from('challenges').insert(payload);
@@ -605,7 +588,12 @@
       return;
     }
 
-    $('#challengeNotice').textContent = 'Challenge submitted. It is now in the queue.';
+    // Mark the node as challenged
+    if (targetType === 'node') {
+      await sb.from('nodes').update({ status: 'challenged' }).eq('id', target);
+    }
+
+    $('#challengeNotice').textContent = 'Challenge submitted.';
     $('#challengeNotice').classList.remove('hidden');
     await loadAll();
     renderStats();
@@ -615,24 +603,20 @@
 
   async function handleFactSubmit(e) {
     e.preventDefault();
-    const id = 'f' + Date.now();
-    const title = $('#newFactTitle').value.trim();
-    const summary = $('#newFactSummary').value.trim();
-    const type = $('#newFactType').value;
+    const id        = 'f' + Date.now();
+    const title     = $('#newFactTitle').value.trim();
+    const summary   = $('#newFactSummary').value.trim();
+    const type      = $('#newFactType').value;
     const linkedIds = $('#newFactLinks').value.split(',').map(s => s.trim()).filter(Boolean);
 
-    const nodePayload = {
-      id,
-      title,
-      summary,
-      type,
-      status: 'pending',
-      confidence: 3.0,
+    // Publish directly as 'new' — no moderation needed
+    const { error: nodeErr } = await sb.from('nodes').insert({
+      id, title, summary, type,
+      status:      'new',
+      confidence:  3.0,
       votes_count: 0,
-      created_by: currentUser.id
-    };
-
-    const { error: nodeErr } = await sb.from('nodes').insert(nodePayload);
+      created_by:  currentUser.id
+    });
     if (nodeErr) {
       $('#factNotice').textContent = nodeErr.message;
       $('#factNotice').classList.remove('hidden');
@@ -640,13 +624,9 @@
     }
 
     if (linkedIds.length) {
-      const linksPayload = linkedIds.map(to => ({
-        from_id: id,
-        to_id: to,
-        kind: 'support',
-        created_by: currentUser.id
-      }));
-      const { error: linkErr } = await sb.from('links').insert(linksPayload);
+      const { error: linkErr } = await sb.from('links').insert(
+        linkedIds.map(to => ({ from_id: id, to_id: to, kind: 'support', created_by: currentUser.id }))
+      );
       if (linkErr) {
         $('#factNotice').textContent = linkErr.message;
         $('#factNotice').classList.remove('hidden');
@@ -654,24 +634,7 @@
       }
     }
 
-    const { error: subErr } = await sb.from('submissions').insert({
-      id,
-      node_id: id,
-      title,
-      summary,
-      type,
-      links: linkedIds,
-      user_id: currentUser.id,
-      status: 'pending'
-    });
-
-    if (subErr) {
-      $('#factNotice').textContent = subErr.message;
-      $('#factNotice').classList.remove('hidden');
-      return;
-    }
-
-    $('#factNotice').textContent = `"${title}" submitted.`;
+    $('#factNotice').textContent = `"${title}" published to the graph.`;
     $('#factNotice').classList.remove('hidden');
     await loadAll();
     state.currentId = id;
@@ -682,37 +645,28 @@
 
   async function handleSourceSubmit(e) {
     e.preventDefault();
-    const n = byId(state.currentId);
+    const n   = byId(state.currentId);
     if (!n) return;
-
     const sid = 's' + Date.now();
-    const sourcePayload = {
-      id: sid,
-      title: $('#srcTitle').value.trim(),
-      kind: $('#srcKind').value,
-      quality: $('#srcQuality').value,
-      note: $('#srcNote').value.trim() || '',
+    const { error: srcErr } = await sb.from('sources').insert({
+      id:         sid,
+      title:      $('#srcTitle').value.trim(),
+      kind:       $('#srcKind').value,
+      quality:    $('#srcQuality').value,
+      note:       $('#srcNote').value.trim() || '',
       created_by: currentUser.id
-    };
-
-    const { error: srcErr } = await sb.from('sources').insert(sourcePayload);
+    });
     if (srcErr) {
       $('#sourceNotice').textContent = srcErr.message;
       $('#sourceNotice').classList.remove('hidden');
       return;
     }
-
-    const { error: joinErr } = await sb.from('node_sources').insert({
-      node_id: n.id,
-      source_id: sid
-    });
-
+    const { error: joinErr } = await sb.from('node_sources').insert({ node_id: n.id, source_id: sid });
     if (joinErr) {
       $('#sourceNotice').textContent = joinErr.message;
       $('#sourceNotice').classList.remove('hidden');
       return;
     }
-
     $('#sourceNotice').textContent = `Source attached to "${short(n.title, 50)}".`;
     $('#sourceNotice').classList.remove('hidden');
     await loadAll();
@@ -720,14 +674,8 @@
   }
 
   function bindUI() {
-    $('#themeBtn').addEventListener('click', () => {
-      applyTheme(theme === 'dark' ? 'light' : 'dark');
-    });
-
-    $('#logoutBtn').addEventListener('click', async () => {
-      await sb.auth.signOut();
-      window.location.href = '../';
-    });
+    $('#themeBtn').addEventListener('click', () => applyTheme(theme === 'dark' ? 'light' : 'dark'));
+    $('#logoutBtn').addEventListener('click', async () => { await sb.auth.signOut(); window.location.href = '../'; });
 
     $('#voteRange').addEventListener('input', e => {
       $('#confidenceValue').textContent = Number(e.target.value).toFixed(1);
@@ -735,18 +683,16 @@
     $('#voteBtn').addEventListener('click', handleVote);
 
     $('#factChallengeBtn').addEventListener('click', () => openChallenge(state.currentId, null));
-    $('#closeModal').addEventListener('click', () => $('#challengeModal').classList.remove('show'));
+    $('#closeModal').addEventListener('click',       () => $('#challengeModal').classList.remove('show'));
     $('#challengeModal').addEventListener('click', e => { if (e.target === $('#challengeModal')) $('#challengeModal').classList.remove('show'); });
     $('#challengeForm').addEventListener('submit', handleChallengeSubmit);
 
     $('#addFactBtn').addEventListener('click', () => {
-      $('#newFactTitle').value = '';
-      $('#newFactSummary').value = '';
-      $('#newFactLinks').value = '';
+      $('#newFactTitle').value = ''; $('#newFactSummary').value = ''; $('#newFactLinks').value = '';
       $('#factNotice').classList.add('hidden');
       $('#factModal').classList.add('show');
     });
-    $('#closeFactModal').addEventListener('click', () => $('#factModal').classList.remove('show'));
+    $('#closeFactModal').addEventListener('click',   () => $('#factModal').classList.remove('show'));
     $('#factModal').addEventListener('click', e => { if (e.target === $('#factModal')) $('#factModal').classList.remove('show'); });
     $('#factForm').addEventListener('submit', handleFactSubmit);
 
@@ -767,14 +713,14 @@
       syncFilterButtons(); renderGraph(); renderLinkedPanel();
     });
 
-    $('#zoomIn').addEventListener('click', () => zoomBy(1.2));
-    $('#zoomOut').addEventListener('click', () => zoomBy(0.83));
+    $('#zoomIn').addEventListener('click',    () => zoomBy(1.2));
+    $('#zoomOut').addEventListener('click',   () => zoomBy(0.83));
     $('#zoomReset').addEventListener('click', () => { vx = 0; vy = 0; vscale = 1; applyTransform(); });
   }
 
   init().catch(err => {
     console.error(err);
-    const el = document.body;
-    if (el) el.insertAdjacentHTML('afterbegin', `<div style="padding:1rem;color:#fff;background:#7d1e5e">Supabase init failed: ${esc(err.message || err)}</div>`);
+    document.body?.insertAdjacentHTML('afterbegin',
+      `<div style="padding:1rem;color:#fff;background:#7d1e5e">Supabase init failed: ${esc(err.message || err)}</div>`);
   });
 })();

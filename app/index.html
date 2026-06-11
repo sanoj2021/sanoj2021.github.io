@@ -17,7 +17,6 @@
       <div class="brand"><div class="brand-name">ScienceDB</div><span class="pill">alpha</span></div>
       <nav class="nav" id="navLinks">
         <a href="#graph" data-view="graph" class="active">Graph</a>
-        <a href="#queue" data-view="queue">Queue</a>
       </nav>
     </aside>
     <main class="main">
@@ -36,7 +35,7 @@
         <div class="stats-row">
           <div class="stat"><div class="stat-k">Facts</div><div class="stat-v" id="statFacts">0</div></div>
           <div class="stat"><div class="stat-k">Questions</div><div class="stat-v" id="statQuestions">0</div></div>
-          <div class="stat"><div class="stat-k">Queue</div><div class="stat-v" id="statQueue">0</div></div>
+          <div class="stat"><div class="stat-k">Challenged</div><div class="stat-v" id="statQueue">0</div></div>
         </div>
         <div class="graph-layout" id="mainLayout">
           <article class="card graph-card" id="graphPanel">
@@ -54,11 +53,19 @@
               <span class="filter-hint" id="filterHint"></span>
             </div>
             <div class="graph-canvas" id="graphCanvas">
-              <!-- Add fact button overlaid in top-left of canvas -->
               <button class="btn graph-add-btn" id="addFactBtn">+ Add fact</button>
               <svg id="graphSvg" aria-label="Fact graph"></svg>
             </div>
-            <div class="legend"><span class="leg support">&#x2192; supports</span><span class="leg depend">- - depends</span><span class="leg conflict">&#x2192; conflicts</span></div>
+            <div class="legend">
+              <span class="leg support">&#x2192; supports</span>
+              <span class="leg depend">- - depends</span>
+              <span class="leg conflict">&#x2192; conflicts</span>
+              <span class="leg-color new-leg">&#9679; new (&lt;10 votes)</span>
+              <span class="leg-color growing-leg">&#9679; growing (10–99)</span>
+              <span class="leg-color accepted-leg">&#9679; accepted</span>
+              <span class="leg-color contested-leg">&#9679; contested</span>
+              <span class="leg-color rejected-leg">&#9679; rejected</span>
+            </div>
           </article>
           <aside class="card panel" id="detailPanel">
             <div class="section-title">Selected fact</div>
@@ -74,10 +81,21 @@
               <button class="btn warn" id="factChallengeBtn">Challenge fact</button>
             </div>
             <div class="notice hidden" id="voteNotice"></div>
+            <!-- Challenge votes section, shown when node is challenged -->
+            <div id="challengeVoteSection" class="hidden">
+              <div class="section-title" style="margin:1rem 0 .45rem">&#9398; Active challenge</div>
+              <p id="challengeReason" class="fact-summary" style="font-size:.85rem;opacity:.8"></p>
+              <div class="challenge-vote-bar" id="challengeVoteBar"></div>
+              <div class="actions" style="margin-top:.5rem">
+                <button class="btn error" id="cvValid">&#10003; Valid concern</button>
+                <button class="btn" id="cvInvalid">&#10007; No problem</button>
+              </div>
+              <div class="notice hidden" id="challengeVoteNotice"></div>
+            </div>
           </aside>
         </div>
         <div class="graph-layout" id="lowerLayout">
-          <section class="card panel"><div class="section-title" id="lowerLeftTitle">Linked facts</div><div class="list" id="linkedFacts"></div></section>
+          <section class="card panel"><div class="section-title" id="lowerLeftTitle">Linked nodes</div><div class="list" id="linkedFacts"></div></section>
           <section class="card panel" id="sourcesPanel">
             <div class="section-title">Sources</div>
             <div class="list" id="sources"></div>
@@ -114,6 +132,7 @@
     </main>
   </div>
 
+  <!-- Challenge modal -->
   <div class="modal-backdrop" id="challengeModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal">
       <h3 id="modalTitle" class="modal-title">Challenge</h3>
@@ -138,10 +157,11 @@
     </div>
   </div>
 
+  <!-- Add fact modal -->
   <div class="modal-backdrop" id="factModal" role="dialog" aria-modal="true" aria-labelledby="factModalTitle">
     <div class="modal">
       <h3 id="factModalTitle" class="modal-title">Add fact</h3>
-      <p class="modal-intro">Submit a new atomic fact. It will appear in the queue for moderation before becoming stable.</p>
+      <p class="modal-intro">Submit a new atomic fact. It will appear immediately on the graph and gain confidence as users vote on it.</p>
       <form id="factForm">
         <label for="newFactTitle">Fact statement</label>
         <textarea id="newFactTitle" rows="2" required placeholder="A clear, single atomic statement."></textarea>
@@ -156,7 +176,7 @@
         <label for="newFactLinks">Link to existing fact IDs (comma-separated, e.g. f1, f3)</label>
         <input id="newFactLinks" placeholder="f1, f2" />
         <div class="actions">
-          <button type="submit" class="btn primary">Submit for review</button>
+          <button type="submit" class="btn primary">Publish fact</button>
           <button type="button" class="btn" id="closeFactModal">Cancel</button>
         </div>
         <div class="notice hidden" id="factNotice"></div>
