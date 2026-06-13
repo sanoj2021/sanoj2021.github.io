@@ -28,8 +28,11 @@
     challengeVotes: [],
     nodeVoteSummary: [],
     challengeVoteSummary: [],
+    linkVotes: [],
+    linkVoteSummary: [],
     positions: structuredClone(BASE_POS),
     currentId: 'f1',
+    selectedEdge: null,   // { fromId, toId, linkId, kind }
     view: 'graph',
     linkedFilter: null
   };
@@ -91,6 +94,33 @@
     return { fill, dot, opacity };
   }
 
+  // ── Edge visual properties from link vote summary ────────────────
+  function edgeVisuals(linkId) {
+    const s = state.linkVoteSummary.find(s => s.id === linkId);
+    if (!s || Number(s.total_votes) === 0) {
+      return { strokeWidth: 2, opacity: 0.55, label: null };
+    }
+    const avg   = Number(s.avg_confidence);
+    const total = Number(s.total_votes);
+    // stroke 1.5..5 mapped from avg 1..5
+    const strokeWidth = 1.5 + ((avg - 1) / 4) * 3.5;
+    // opacity 0.45..1 mapped from avg 1..5, boosted slightly by vote count
+    const basOp  = 0.45 + ((avg - 1) / 4) * 0.55;
+    const countBoost = Math.min(0.15, total * 0.01);
+    const opacity = Math.min(1, basOp + countBoost);
+    const label   = total >= 3 ? avg.toFixed(1) : null;
+    return { strokeWidth, opacity, label };
+  }
+
+  // ── Find a link object by from/to pair ───────────────────────────
+  function findLink(fromId, toId) {
+    return state.links.find(l => l.from_id === fromId && l.to_id === toId);
+  }
+
+  function linkVoteByUser(linkId) {
+    return state.linkVotes.find(v => v.link_id === linkId && v.user_id === currentUser?.id);
+  }
+
   function challengeOverlayDarkness(nodeId) {
     const node = byId(nodeId);
     if (!node || node.status !== 'challenged') return null;
@@ -122,7 +152,8 @@
     const [
       nodesRes, linksRes, sourcesRes, nodeSourcesRes,
       votesRes, challengesRes, challengeVotesRes,
-      nodeVoteSummaryRes, challengeVoteSummaryRes
+      nodeVoteSummaryRes, challengeVoteSummaryRes,
+      linkVotesRes, linkVoteSummaryRes
     ] = await Promise.all([
       sb.from('nodes').select('*').order('created_at', { ascending: true }),
       sb.from('links').select('*'),
@@ -132,7 +163,9 @@
       sb.from('challenges').select('*').order('created_at', { ascending: false }),
       sb.from('challenge_votes').select('*'),
       sb.from('node_vote_summary').select('*'),
-      sb.from('challenge_vote_summary').select('*')
+      sb.from('challenge_vote_summary').select('*'),
+      sb.from('link_votes').select('*'),
+      sb.from('link_vote_summary').select('*')
     ]);
 
     if (nodesRes.error)   throw nodesRes.error;
@@ -143,7 +176,7 @@
       ...n,
       votes: n.votes_count,
       sources: (nodeSourcesRes.data || []).filter(ns => ns.node_id === n.id).map(ns => ns.source_id),
-      links:   (linksRes.data   || []).filter(l => l.from_id === n.id).map(l => ({ to: l.to_id, kind: l.kind }))
+      links:   (linksRes.data   || []).filter(l => l.from_id === n.id).map(l => ({ to: l.to_id, kind: l.kind, id: l.id }))
     }));
     state.links                = linksRes.data || [];
     state.sources              = Object.fromEntries((sourcesRes.data || []).map(s => [s.id, s]));
@@ -153,6 +186,8 @@
     state.challengeVotes       = challengeVotesRes.data || [];
     state.nodeVoteSummary      = nodeVoteSummaryRes.data || [];
     state.challengeVoteSummary = challengeVoteSummaryRes.data || [];
+    state.linkVotes            = linkVotesRes.data || [];
+    state.linkVoteSummary      = linkVoteSummaryRes.data || [];
 
     if (!byId(state.currentId) && state.nodes[0]) state.currentId = state.nodes[0].id;
     renderStats();
@@ -170,20 +205,17 @@
     if (node) {
       (node.links || []).forEach(l => {
         const nb = byId(l.to);
-        if (nb && !seen.has(nb.id)) { seen.add(nb.id); result.push({ node: nb, kind: l.kind }); }
+        if (nb && !seen.has(nb.id)) { seen.add(nb.id); result.push({ node: nb, kind: l.kind, linkId: l.id }); }
       });
     }
     state.nodes.forEach(m => {
       (m.links || []).forEach(l => {
-        if (l.to === id && !seen.has(m.id)) { seen.add(m.id); result.push({ node: m, kind: l.kind }); }
+        if (l.to === id && !seen.has(m.id)) { seen.add(m.id); result.push({ node: m, kind: l.kind, linkId: l.id }); }
       });
     });
     return result;
   }
 
-  // Stats elements are optional — they were removed from the UI but
-  // other code still calls renderStats(). Guard each write so absent
-  // elements are silently skipped instead of throwing.
   function renderStats() {
     const facts     = $('#statFacts');
     const questions = $('#statQuestions');
@@ -240,7 +272,27 @@
         const mx  = (x1 + x2) / 2;
         const cls = l.kind === 'support' ? 'support' : l.kind === 'conflict' ? 'conflict' : 'depend';
         const mk  = l.kind === 'support' ? 'url(#aS)' : l.kind === 'conflict' ? 'url(#aC)' : 'url(#aD)';
-        edges += `<path class="edge ${cls}" d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" marker-end="${mk}"/>`;
+
+        const vis = l.id ? edgeVisuals(l.id) : { strokeWidth: 2, opacity: 0.55, label: null };
+        const isSelected = state.selectedEdge?.linkId === l.id;
+        const sw  = isSelected ? Math.max(vis.strokeWidth, 3) : vis.strokeWidth;
+        const op  = isSelected ? 1 : vis.opacity;
+        const selAttr = isSelected ? ' edge-selected' : '';
+
+        // Invisible hit-area path so thin edges are easy to click
+        edges += `<path class="edge-hit" data-link-id="${l.id ?? ''}" data-from="${n.id}" data-to="${l.to}"
+          d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}"/>`;
+
+        edges += `<path class="edge ${cls}${selAttr}" data-link-id="${l.id ?? ''}" data-from="${n.id}" data-to="${l.to}"
+          d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}"
+          marker-end="${mk}" style="stroke-width:${sw};opacity:${op}"/>`;
+
+        // Avg-confidence micro-label on edge midpoint (only if 3+ votes)
+        if (vis.label) {
+          const lx = (x1 + x2) / 2;
+          const ly = (y1 + y2) / 2 - 7;
+          edges += `<text class="edge-label" x="${lx}" y="${ly}" text-anchor="middle">${vis.label}</text>`;
+        }
       });
     });
 
@@ -272,66 +324,99 @@
     });
 
     svg.innerHTML = defs + `<g id="graphRoot" transform="translate(${vx},${vy}) scale(${vscale})">${edges}${nodes}</g>`;
+
+    // Node click
     $$('.node').forEach(el => el.addEventListener('click', e => {
       e.stopPropagation();
+      state.selectedEdge = null;
       state.currentId = el.dataset.id;
       renderGraph();
       renderDetail();
     }));
+
+    // Edge click (hit-area + visible path both carry data attributes)
+    $$('.edge-hit, .edge').forEach(el => {
+      if (!el.dataset.linkId) return;
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        const linkId = el.dataset.linkId;
+        const fromId = el.dataset.from;
+        const toId   = el.dataset.to;
+        if (!linkId) return;
+        const linkObj = state.links.find(l => l.id === linkId);
+        state.selectedEdge = { fromId, toId, linkId, kind: linkObj?.kind };
+        // Deselect node
+        state.currentId = fromId; // keep context but show edge panel
+        renderGraph();
+        renderEdgeDetail();
+      });
+    });
+
     initPanZoom();
   }
 
-  function initPanZoom() {
-    const canvas = $('#graphCanvas');
-    const svg    = $('#graphSvg');
-    let dragging = false, startX = 0, startY = 0, startVx = 0, startVy = 0;
+  // ── Edge detail panel ────────────────────────────────────────────
+  function renderEdgeDetail() {
+    const e = state.selectedEdge;
+    if (!e) return;
+    const fromNode = byId(e.fromId);
+    const toNode   = byId(e.toId);
+    const summary  = state.linkVoteSummary.find(s => s.id === e.linkId);
+    const myVote   = linkVoteByUser(e.linkId);
+    const total    = summary ? Number(summary.total_votes)    : 0;
+    const avg      = summary ? Number(summary.avg_confidence) : null;
+    const up       = summary ? Number(summary.up_votes)       : 0;
+    const down     = summary ? Number(summary.down_votes)     : 0;
 
-    canvas.onpointerdown = e => {
-      if (e.target.closest('.node')) return;
-      canvas.setPointerCapture(e.pointerId);
-      dragging = true; startX = e.clientX; startY = e.clientY; startVx = vx; startVy = vy;
-    };
-    canvas.onpointermove = e => {
-      if (!dragging) return;
-      const rect = svg.getBoundingClientRect();
-      vx = startVx + (e.clientX - startX) * (VW / rect.width);
-      vy = startVy + (e.clientY - startY) * (VH / rect.height);
-      clampTransform(); applyTransform();
-    };
-    canvas.onpointerup = canvas.onpointercancel = () => { dragging = false; };
-    canvas.onwheel = e => {
-      e.preventDefault();
-      const rect   = svg.getBoundingClientRect();
-      const mx     = (e.clientX - rect.left) * (VW / rect.width);
-      const my     = (e.clientY - rect.top)  * (VH / rect.height);
-      const factor = e.deltaY < 0 ? 1.06 : 0.94;
-      const ns     = Math.min(4, Math.max(0.25, vscale * factor));
-      vx = mx - (mx - vx) * (ns / vscale);
-      vy = my - (my - vy) * (ns / vscale);
-      vscale = ns;
-      clampTransform(); applyTransform();
-    };
-  }
+    const kindLabel  = e.kind === 'support' ? 'supports' : e.kind === 'conflict' ? 'conflicts with' : 'depends on';
+    const kindCls    = e.kind === 'support' ? 'support' : e.kind === 'conflict' ? 'conflict' : '';
+    const voteLabel  = total === 0 ? 'No votes yet'
+                     : total < 3  ? `${total} vote${total > 1 ? 's' : ''} (new)`
+                     : avg >= 4   ? `${total} votes \u2714 strong`
+                     : avg <= 2   ? `${total} votes \u2716 weak`
+                     : `${total} votes \u007e moderate`;
 
-  function zoomBy(f, cx = VW / 2, cy = VH / 2) {
-    const ns = Math.min(4, Math.max(0.25, vscale * f));
-    vx = cx - (cx - vx) * (ns / vscale);
-    vy = cy - (cy - vy) * (ns / vscale);
-    vscale = ns;
-    clampTransform(); applyTransform();
-  }
+    $('#edgePanelTitle').textContent  = 'Selected connection';
+    $('#edgeFrom').textContent        = short(fromNode?.title || e.fromId, 40);
+    $('#edgeTo').textContent          = short(toNode?.title   || e.toId,   40);
+    $('#edgeKindBadge').textContent   = kindLabel;
+    $('#edgeKindBadge').className     = `badge ${kindCls}`;
+    $('#edgeVoteLabel').textContent   = voteLabel;
+    if (avg !== null && total > 0) {
+      $('#edgeAvgWrap').classList.remove('hidden');
+      $('#edgeAvgValue').textContent = avg.toFixed(2);
+      const pct = Math.round(((avg - 1) / 4) * 100);
+      $('#edgeAvgBar').style.width   = pct + '%';
+      $('#edgeAvgBar').className     = `edge-bar-fill ${avg >= 4 ? 'high' : avg <= 2 ? 'low' : 'mid'}`;
+    } else {
+      $('#edgeAvgWrap').classList.add('hidden');
+    }
 
-  function syncFilterButtons() {
-    const f = state.linkedFilter;
-    $('#filterFacts').setAttribute('aria-pressed',     f === 'facts'     ? 'true' : 'false');
-    $('#filterQuestions').setAttribute('aria-pressed', f === 'questions' ? 'true' : 'false');
-    $('#filterHint').textContent = f ? `Showing only ${f} directly linked to selected node` : '';
+    const sliderVal = myVote ? myVote.value : 3;
+    $('#edgeVoteRange').value             = sliderVal;
+    $('#edgeConfidenceValue').textContent = sliderVal;
+    if (myVote) {
+      $('#edgeVoteBtn').textContent = 'Update vote';
+      $('#edgeVoteNotice').textContent = `Your current vote: ${myVote.value}/5`;
+      $('#edgeVoteNotice').classList.remove('hidden');
+    } else {
+      $('#edgeVoteBtn').textContent = 'Vote on connection';
+      $('#edgeVoteNotice').classList.add('hidden');
+    }
+
+    // Switch detail panel to edge view
+    $('#nodeDetailContent').classList.add('hidden');
+    $('#edgeDetailContent').classList.remove('hidden');
   }
 
   function renderDetail() {
     const n = byId(state.currentId) || state.nodes[0];
     if (!n) return;
     state.currentId = n.id;
+
+    // Switch back to node view
+    $('#nodeDetailContent').classList.remove('hidden');
+    $('#edgeDetailContent').classList.add('hidden');
 
     $('#factTitle').textContent   = n.title;
     $('#factSummary').textContent = n.summary;
@@ -423,7 +508,6 @@
 
     section.classList.remove('hidden');
 
-    // Replace buttons to remove stale listeners
     const newValid    = validBtn.cloneNode(true);
     const newInvalid  = invalidBtn.cloneNode(true);
     validBtn.parentNode.replaceChild(newValid, validBtn);
@@ -451,12 +535,10 @@
 
     let error;
     if (existing) {
-      // Update existing vote — user changed their mind
       ({ error } = await sb.from('challenge_votes')
         .update({ is_valid: isValid })
         .eq('id', existing.id));
     } else {
-      // New vote — only send the columns that actually exist on the table
       ({ error } = await sb.from('challenge_votes').insert({
         challenge_id: challengeId,
         user_id:      currentUser.id,
@@ -513,14 +595,21 @@
       : 'Linked nodes';
 
     $('#linkedFacts').innerHTML = neighbours.length
-      ? neighbours.map(({ node: ln, kind }) => {
+      ? neighbours.map(({ node: ln, kind, linkId }) => {
           const lc        = ln.status === 'challenged' ? 'conflict' : ln.type === 'question' ? 'question' : ln.status === 'new' ? 'pending' : 'support';
           const kindLabel = kind === 'support' ? 'supports' : kind === 'conflict' ? 'conflicts' : 'depends';
+          const lvs       = linkId ? state.linkVoteSummary.find(s => s.id === linkId) : null;
+          const lvTotal   = lvs ? Number(lvs.total_votes) : 0;
+          const lvAvg     = lvs ? Number(lvs.avg_confidence) : null;
+          const lvBadge   = lvTotal === 0
+            ? `<span class="badge edge-vote-badge" data-link-id="${linkId}" style="cursor:pointer" title="No votes on this connection yet. Click to vote.">&#9899; vote edge</span>`
+            : `<span class="badge edge-vote-badge ${lvAvg >= 4 ? 'support' : lvAvg <= 2 ? 'conflict' : ''}" data-link-id="${linkId}" style="cursor:pointer" title="Connection confidence: ${lvAvg?.toFixed(2)}. Click to vote.">edge ${lvAvg?.toFixed(1)} (${lvTotal}v)</span>`;
           return `<div class="item clickable" data-navigate="${ln.id}">
             <div class="badges" style="margin-bottom:.25rem">
               <span class="badge ${lc}">${esc(ln.type)}</span>
               <span class="badge">${esc(ln.status)}</span>
               <span class="badge">${esc(kindLabel)}</span>
+              ${linkId ? lvBadge : ''}
             </div>
             <h4>${esc(ln.title)}</h4><p>${esc(ln.summary)}</p>
             <small>Click to select \u2192 ${ln.id}</small>
@@ -529,10 +618,24 @@
       : `<div class="item"><p>${f ? 'No ' + f + ' linked to this node.' : 'No linked nodes.'}</p></div>`;
 
     $$('[data-navigate]').forEach(el => el.addEventListener('click', () => {
+      state.selectedEdge = null;
       state.currentId = el.dataset.navigate;
       renderGraph();
       renderDetail();
     }));
+
+    // Edge-vote badges in linked panel open the edge vote panel
+    $$('.edge-vote-badge[data-link-id]').forEach(badge => {
+      badge.addEventListener('click', e => {
+        e.stopPropagation();
+        const linkId  = badge.dataset.linkId;
+        const linkObj = state.links.find(l => l.id === linkId);
+        if (!linkObj) return;
+        state.selectedEdge = { fromId: linkObj.from_id, toId: linkObj.to_id, linkId, kind: linkObj.kind };
+        renderGraph();
+        renderEdgeDetail();
+      });
+    });
   }
 
   function renderSources(n) {
@@ -582,7 +685,27 @@
     $('#challengeModal').classList.add('show');
   }
 
-  // ── Connect-nodes modal ─────────────────────────────────────────
+  // ── Edge vote handler ────────────────────────────────────────────
+  async function handleEdgeVote() {
+    const e = state.selectedEdge;
+    if (!e?.linkId) return;
+    const value  = parseInt($('#edgeVoteRange').value, 10);
+    const notice = $('#edgeVoteNotice');
+    const { error } = await sb.rpc('upsert_link_vote', { p_link_id: e.linkId, p_value: value });
+    if (error) {
+      notice.textContent = error.message;
+      notice.classList.remove('hidden');
+      return;
+    }
+    await loadAll();
+    notice.textContent = `Edge vote saved (${value}/5).`;
+    notice.classList.remove('hidden');
+    renderGraph();
+    renderEdgeDetail();
+    renderLinkedPanel();
+  }
+
+  // ── Connect-nodes modal ──────────────────────────────────────────
   let _connectSelectedId = null;
 
   function openConnectModal() {
@@ -704,7 +827,6 @@
       notice.classList.add('hidden');
     }, 1200);
   }
-  // ────────────────────────────────────────────────────────────────
 
   async function handleVote() {
     const n = byId(state.currentId);
@@ -838,6 +960,17 @@
     });
     $('#voteBtn').addEventListener('click', handleVote);
 
+    // Edge vote controls
+    $('#edgeVoteRange').addEventListener('input', e => {
+      $('#edgeConfidenceValue').textContent = Number(e.target.value).toFixed(0);
+    });
+    $('#edgeVoteBtn').addEventListener('click', handleEdgeVote);
+    $('#edgeBackBtn').addEventListener('click', () => {
+      state.selectedEdge = null;
+      renderGraph();
+      renderDetail();
+    });
+
     $('#factChallengeBtn').addEventListener('click', () => openChallenge(state.currentId, null));
     $('#closeModal').addEventListener('click',       () => $('#challengeModal').classList.remove('show'));
     $('#challengeModal').addEventListener('click', e => { if (e.target === $('#challengeModal')) $('#challengeModal').classList.remove('show'); });
@@ -852,7 +985,6 @@
     $('#factModal').addEventListener('click', e => { if (e.target === $('#factModal')) $('#factModal').classList.remove('show'); });
     $('#factForm').addEventListener('submit', handleFactSubmit);
 
-    // Connect modal
     $('#connectBtn').addEventListener('click', openConnectModal);
     $('#closeConnectModal').addEventListener('click', () => $('#connectModal').classList.remove('show'));
     $('#connectModal').addEventListener('click', e => { if (e.target === $('#connectModal')) $('#connectModal').classList.remove('show'); });
@@ -873,7 +1005,6 @@
     $('#cancelSource').addEventListener('click', () => $('#addSourceDetails').removeAttribute('open'));
     $('#sourceForm').addEventListener('submit', handleSourceSubmit);
 
-    // #navLinks may not exist now that the sidebar is removed — guard it
     const navLinks = $('#navLinks');
     if (navLinks) {
       navLinks.addEventListener('click', e => {
@@ -894,6 +1025,53 @@
     $('#zoomIn').addEventListener('click',    () => zoomBy(1.2));
     $('#zoomOut').addEventListener('click',   () => zoomBy(0.83));
     $('#zoomReset').addEventListener('click', () => { vx = 0; vy = 0; vscale = 1; applyTransform(); });
+  }
+
+  function syncFilterButtons() {
+    const f = state.linkedFilter;
+    $('#filterFacts').setAttribute('aria-pressed',     f === 'facts'     ? 'true' : 'false');
+    $('#filterQuestions').setAttribute('aria-pressed', f === 'questions' ? 'true' : 'false');
+    $('#filterHint').textContent = f ? `Showing only ${f} directly linked to selected node` : '';
+  }
+
+  function initPanZoom() {
+    const canvas = $('#graphCanvas');
+    const svg    = $('#graphSvg');
+    let dragging = false, startX = 0, startY = 0, startVx = 0, startVy = 0;
+
+    canvas.onpointerdown = e => {
+      if (e.target.closest('.node') || e.target.closest('.edge') || e.target.closest('.edge-hit')) return;
+      canvas.setPointerCapture(e.pointerId);
+      dragging = true; startX = e.clientX; startY = e.clientY; startVx = vx; startVy = vy;
+    };
+    canvas.onpointermove = e => {
+      if (!dragging) return;
+      const rect = svg.getBoundingClientRect();
+      vx = startVx + (e.clientX - startX) * (VW / rect.width);
+      vy = startVy + (e.clientY - startY) * (VH / rect.height);
+      clampTransform(); applyTransform();
+    };
+    canvas.onpointerup = canvas.onpointercancel = () => { dragging = false; };
+    canvas.onwheel = e => {
+      e.preventDefault();
+      const rect   = svg.getBoundingClientRect();
+      const mx     = (e.clientX - rect.left) * (VW / rect.width);
+      const my     = (e.clientY - rect.top)  * (VH / rect.height);
+      const factor = e.deltaY < 0 ? 1.06 : 0.94;
+      const ns     = Math.min(4, Math.max(0.25, vscale * factor));
+      vx = mx - (mx - vx) * (ns / vscale);
+      vy = my - (my - vy) * (ns / vscale);
+      vscale = ns;
+      clampTransform(); applyTransform();
+    };
+  }
+
+  function zoomBy(f, cx = VW / 2, cy = VH / 2) {
+    const ns = Math.min(4, Math.max(0.25, vscale * f));
+    vx = cx - (cx - vx) * (ns / vscale);
+    vy = cy - (cy - vy) * (ns / vscale);
+    vscale = ns;
+    clampTransform(); applyTransform();
   }
 
   init().catch(err => {
