@@ -30,8 +30,12 @@ alter table public.challenge_votes
   drop column if exists target_type,
   drop column if exists reason;
 
--- 3. Rebuild challenge_vote_summary view (no longer groups on dropped cols).
-create or replace view public.challenge_vote_summary as
+-- 3. Rebuild challenge_vote_summary view.
+--    Must DROP first — CREATE OR REPLACE cannot change the column list of an
+--    existing view (Postgres error 42P16).
+drop view if exists public.challenge_vote_summary;
+
+create view public.challenge_vote_summary as
 select
   cv.challenge_id,
   c.target_id,
@@ -42,6 +46,10 @@ select
 from public.challenge_votes cv
 join public.challenges c on c.id = cv.challenge_id
 group by cv.challenge_id, c.target_id, c.target_type;
+
+-- Restore RLS-equivalent access: the view inherits the underlying tables'
+-- RLS, but grant SELECT explicitly so anon/authenticated can query it.
+grant select on public.challenge_vote_summary to anon, authenticated;
 
 -- 4. Update the trigger function to read target_id/target_type from
 --    the parent challenges row, not from NEW (which no longer has those cols).
@@ -61,7 +69,7 @@ declare
   c_retire_pct     constant numeric := 0.60;
   c_restore_pct    constant numeric := 0.40;
 begin
-  -- Resolve which challenge_id we are dealing with
+  -- Resolve target_id / target_type from the parent challenges row
   select c.target_id, c.target_type
     into v_node_id, v_target_type
     from public.challenges c
@@ -114,7 +122,7 @@ begin
 end;
 $$;
 
--- Re-attach trigger (DROP + CREATE so the definition picks up the new function body)
+-- Re-attach trigger (DROP + CREATE so it picks up the updated function)
 drop trigger if exists trg_challenge_votes_update_status
   on public.challenge_votes;
 
