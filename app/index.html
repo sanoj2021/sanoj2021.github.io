@@ -78,6 +78,7 @@
             <div class="actions">
               <button class="btn primary" id="voteBtn">Vote</button>
               <button class="btn warn" id="factChallengeBtn">Challenge fact</button>
+              <button class="btn connect" id="connectBtn">+ Connect</button>
             </div>
             <div class="notice hidden" id="voteNotice"></div>
             <div id="challengeVoteSection" class="hidden">
@@ -130,6 +131,7 @@
     </main>
   </div>
 
+  <!-- Challenge modal -->
   <div class="modal-backdrop" id="challengeModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal">
       <h3 id="modalTitle" class="modal-title">Challenge</h3>
@@ -154,6 +156,7 @@
     </div>
   </div>
 
+  <!-- Add fact modal -->
   <div class="modal-backdrop" id="factModal" role="dialog" aria-modal="true" aria-labelledby="factModalTitle">
     <div class="modal">
       <h3 id="factModalTitle" class="modal-title">Add fact</h3>
@@ -176,6 +179,41 @@
           <button type="button" class="btn" id="closeFactModal">Cancel</button>
         </div>
         <div class="notice hidden" id="factNotice"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Connect nodes modal -->
+  <div class="modal-backdrop" id="connectModal" role="dialog" aria-modal="true" aria-labelledby="connectModalTitle">
+    <div class="modal">
+      <h3 id="connectModalTitle" class="modal-title">Connect nodes</h3>
+      <p class="modal-intro" id="connectModalIntro">Create a directed edge from the selected node to another node.</p>
+      <form id="connectForm">
+        <label for="connectFrom">From (selected node)</label>
+        <input id="connectFrom" disabled />
+
+        <label for="connectSearch">Search target node</label>
+        <input id="connectSearch" placeholder="Type to filter by title&hellip;" autocomplete="off" />
+        <div class="connect-node-list" id="connectNodeList" role="listbox" aria-label="Target node options"></div>
+        <input type="hidden" id="connectTargetId" />
+        <div class="connect-selected-preview hidden" id="connectSelectedPreview">
+          <span class="connect-preview-label">Target:</span>
+          <span id="connectPreviewTitle"></span>
+          <button type="button" class="connect-clear-btn" id="connectClearTarget" aria-label="Clear target">&times;</button>
+        </div>
+
+        <label for="connectKind" style="margin-top:.75rem">Relationship type</label>
+        <select id="connectKind">
+          <option value="support">supports &mdash; this node supports the target</option>
+          <option value="depend">depends &mdash; this node depends on the target</option>
+          <option value="conflict">conflicts &mdash; this node contradicts the target</option>
+        </select>
+
+        <div class="actions" style="margin-top:1rem">
+          <button type="submit" class="btn primary" id="connectSubmitBtn" disabled>Create connection</button>
+          <button type="button" class="btn" id="closeConnectModal">Cancel</button>
+        </div>
+        <div class="notice hidden" id="connectNotice"></div>
       </form>
     </div>
   </div>

@@ -49,7 +49,6 @@
   }
 
   // ── Vote-ratio color logic ───────────────────────────────────────
-  // Returns { fill, dot, opacity } based on vote summary for a node
   function nodeColors(nodeId) {
     const summary = state.nodeVoteSummary.find(s => s.id === nodeId);
     const node = byId(nodeId);
@@ -57,18 +56,15 @@
     const up    = summary ? Number(summary.up_votes)    : 0;
     const down  = summary ? Number(summary.down_votes)  : 0;
 
-    // challenged overrides color signal but keeps it desaturated
     const challenged = node?.status === 'challenged';
 
     let fill, dot, opacity = 1;
 
     if (total < 10) {
-      // new / barely voted — grey, semi-transparent
       fill    = 'color-mix(in oklab, #888 18%, var(--surface2))';
       dot     = '#888';
       opacity = total < 1 ? 0.45 : 0.6;
     } else if (total < 100) {
-      // growing — grey but more solid
       fill    = 'color-mix(in oklab, #888 22%, var(--surface2))';
       dot     = '#999';
       opacity = 0.75;
@@ -76,22 +72,18 @@
       const upPct   = up   / total;
       const downPct = down / total;
       if (upPct > 0.65) {
-        // accepted — green
         fill = 'color-mix(in oklab,var(--success,#437a22) 18%,var(--surface2))';
         dot  = 'var(--success,#437a22)';
       } else if (downPct > 0.65) {
-        // rejected — red
         fill = 'color-mix(in oklab,var(--error) 18%,var(--surface2))';
         dot  = 'var(--error)';
       } else {
-        // contested — yellow
         fill = 'color-mix(in oklab,var(--warn) 18%,var(--surface2))';
         dot  = 'var(--warn)';
       }
     }
 
     if (challenged) {
-      // tint with error but keep base fill
       fill = 'color-mix(in oklab,var(--error) 25%,var(--surface2))';
       dot  = 'var(--error)';
     }
@@ -99,18 +91,15 @@
     return { fill, dot, opacity };
   }
 
-  // Challenge overlay darkness: returns 0–1 (0=white overlay, 1=black overlay)
   function challengeOverlayDarkness(nodeId) {
     const node = byId(nodeId);
     if (!node || node.status !== 'challenged') return null;
-    // find latest open challenge for this node
     const ch = state.challenges.find(c => c.target_id === nodeId && c.target_type === 'node');
     if (!ch) return null;
     const cvs = state.challengeVoteSummary.find(s => s.challenge_id === ch.id);
-    if (!cvs || Number(cvs.total_votes) === 0) return 0.5; // neutral
+    if (!cvs || Number(cvs.total_votes) === 0) return 0.5;
     return Number(cvs.valid_votes) / Number(cvs.total_votes);
   }
-  // ────────────────────────────────────────────────────────────────
 
   async function init() {
     await requireAuth();
@@ -257,7 +246,6 @@
       const r       = active ? 34 : 26;
       const { fill, dot, opacity } = nodeColors(n.id);
 
-      // Challenge overlay badge
       let badge = '';
       const darkness = challengeOverlayDarkness(n.id);
       if (darkness !== null) {
@@ -357,7 +345,6 @@
       $('#voteNotice').classList.add('hidden');
     }
 
-    // Vote-ratio badge in meta
     const summary  = state.nodeVoteSummary.find(s => s.id === n.id);
     const total    = summary ? Number(summary.total_votes) : 0;
     const up       = summary ? Number(summary.up_votes)    : 0;
@@ -379,7 +366,6 @@
       `<span class="badge">${voteLabel}</span>` +
       `<span class="badge">avg: ${Number(summary?.avg_confidence ?? n.confidence).toFixed(1)}</span>`;
 
-    // Challenge vote section
     renderChallengeVoteSection(n);
     renderLinkedPanel();
     renderSources(n);
@@ -424,7 +410,6 @@
 
     section.classList.remove('hidden');
 
-    // Re-bind to avoid duplicate listeners
     const newValid   = validBtn.cloneNode(true);
     const newInvalid = invalidBtn.cloneNode(true);
     validBtn.parentNode.replaceChild(newValid, validBtn);
@@ -548,6 +533,133 @@
     $('#challengeModal').classList.add('show');
   }
 
+  // ── Connect-nodes modal ─────────────────────────────────────────
+  let _connectSelectedId = null;
+
+  function openConnectModal() {
+    const fromNode = byId(state.currentId);
+    if (!fromNode) return;
+
+    _connectSelectedId = null;
+    $('#connectFrom').value = `${fromNode.title} (${fromNode.id})`;
+    $('#connectSearch').value = '';
+    $('#connectTargetId').value = '';
+    $('#connectNodeList').innerHTML = '';
+    $('#connectNodeList').classList.remove('open');
+    $('#connectSelectedPreview').classList.add('hidden');
+    $('#connectSubmitBtn').disabled = true;
+    $('#connectKind').value = 'support';
+    $('#connectNotice').classList.add('hidden');
+    $('#connectModal').classList.add('show');
+    setTimeout(() => $('#connectSearch').focus(), 80);
+  }
+
+  function populateConnectList(query) {
+    const fromId = state.currentId;
+    const q = (query || '').trim().toLowerCase();
+    const list = $('#connectNodeList');
+
+    // Exclude self and nodes already directly connected (outgoing)
+    const alreadyLinked = new Set(
+      (byId(fromId)?.links || []).map(l => l.to)
+    );
+
+    const matches = state.nodes.filter(n =>
+      n.id !== fromId &&
+      !alreadyLinked.has(n.id) &&
+      (q === '' || n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q))
+    ).slice(0, 30);
+
+    if (matches.length === 0) {
+      list.innerHTML = '<div class="connect-node-option" style="color:var(--faint);cursor:default">No matching nodes</div>';
+      list.classList.add('open');
+      return;
+    }
+
+    list.innerHTML = matches.map(n =>
+      `<div class="connect-node-option" data-node-id="${n.id}" role="option" tabindex="0">
+        ${esc(short(n.title, 60))}<span class="opt-type">${esc(n.type)} · ${esc(n.status)}</span>
+      </div>`
+    ).join('');
+    list.classList.add('open');
+
+    list.querySelectorAll('[data-node-id]').forEach(el => {
+      el.addEventListener('click', () => selectConnectTarget(el.dataset.nodeId));
+      el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') selectConnectTarget(el.dataset.nodeId); });
+    });
+  }
+
+  function selectConnectTarget(nodeId) {
+    const node = byId(nodeId);
+    if (!node) return;
+    _connectSelectedId = nodeId;
+    $('#connectTargetId').value = nodeId;
+    $('#connectSearch').value = node.title;
+    $('#connectNodeList').classList.remove('open');
+    $('#connectPreviewTitle').textContent = `${node.title} (${node.id})`;
+    $('#connectSelectedPreview').classList.remove('hidden');
+    $('#connectSubmitBtn').disabled = false;
+  }
+
+  function clearConnectTarget() {
+    _connectSelectedId = null;
+    $('#connectTargetId').value = '';
+    $('#connectSearch').value = '';
+    $('#connectSelectedPreview').classList.add('hidden');
+    $('#connectSubmitBtn').disabled = true;
+    $('#connectNodeList').classList.remove('open');
+    $('#connectSearch').focus();
+  }
+
+  async function handleConnectSubmit(e) {
+    e.preventDefault();
+    const fromId  = state.currentId;
+    const toId    = _connectSelectedId;
+    const kind    = $('#connectKind').value;
+    const notice  = $('#connectNotice');
+
+    if (!fromId || !toId) {
+      notice.textContent = 'Please select a target node.';
+      notice.classList.remove('hidden');
+      return;
+    }
+
+    // Duplicate check (client-side)
+    const alreadyLinked = (byId(fromId)?.links || []).some(l => l.to === toId);
+    if (alreadyLinked) {
+      notice.textContent = 'A connection from this node to the target already exists.';
+      notice.classList.remove('hidden');
+      return;
+    }
+
+    const { error } = await sb.from('links').insert({
+      from_id:    fromId,
+      to_id:      toId,
+      kind:       kind,
+      created_by: currentUser.id
+    });
+
+    if (error) {
+      notice.textContent = error.message;
+      notice.classList.remove('hidden');
+      return;
+    }
+
+    notice.textContent = `Connection created: ${short(byId(fromId)?.title, 30)} \u2192 ${short(byId(toId)?.title, 30)}.`;
+    notice.classList.remove('hidden');
+
+    await loadAll();
+    renderGraph();
+    renderDetail();
+
+    // Close modal after short delay so user sees the success message
+    setTimeout(() => {
+      $('#connectModal').classList.remove('show');
+      notice.classList.add('hidden');
+    }, 1200);
+  }
+  // ────────────────────────────────────────────────────────────────
+
   async function handleVote() {
     const n = byId(state.currentId);
     if (!n) return;
@@ -588,7 +700,6 @@
       return;
     }
 
-    // Mark the node as challenged
     if (targetType === 'node') {
       await sb.from('nodes').update({ status: 'challenged' }).eq('id', target);
     }
@@ -609,7 +720,6 @@
     const type      = $('#newFactType').value;
     const linkedIds = $('#newFactLinks').value.split(',').map(s => s.trim()).filter(Boolean);
 
-    // Publish directly as 'new' — no moderation needed
     const { error: nodeErr } = await sb.from('nodes').insert({
       id, title, summary, type,
       status:      'new',
@@ -695,6 +805,24 @@
     $('#closeFactModal').addEventListener('click',   () => $('#factModal').classList.remove('show'));
     $('#factModal').addEventListener('click', e => { if (e.target === $('#factModal')) $('#factModal').classList.remove('show'); });
     $('#factForm').addEventListener('submit', handleFactSubmit);
+
+    // Connect modal
+    $('#connectBtn').addEventListener('click', openConnectModal);
+    $('#closeConnectModal').addEventListener('click', () => $('#connectModal').classList.remove('show'));
+    $('#connectModal').addEventListener('click', e => { if (e.target === $('#connectModal')) $('#connectModal').classList.remove('show'); });
+    $('#connectSearch').addEventListener('input', e => populateConnectList(e.target.value));
+    $('#connectSearch').addEventListener('focus', e => populateConnectList(e.target.value));
+    $('#connectSearch').addEventListener('keydown', e => {
+      if (e.key === 'Escape') { $('#connectNodeList').classList.remove('open'); }
+    });
+    document.addEventListener('click', e => {
+      if (!e.target.closest('#connectModal')) return;
+      if (!e.target.closest('#connectSearch') && !e.target.closest('#connectNodeList')) {
+        $('#connectNodeList').classList.remove('open');
+      }
+    });
+    $('#connectClearTarget').addEventListener('click', clearConnectTarget);
+    $('#connectForm').addEventListener('submit', handleConnectSubmit);
 
     $('#cancelSource').addEventListener('click', () => $('#addSourceDetails').removeAttribute('open'));
     $('#sourceForm').addEventListener('submit', handleSourceSubmit);

@@ -14,35 +14,19 @@
 - ✅ Challenge trigger deployed (`fn_update_node_status_from_challenge`)
   — auto-flips `nodes.status` based on challenge vote ratio
   — migration file: `supabase/migrations/20260612121434_challenge_trigger_fix.sql`
+- ✅ Realtime enabled via Supabase UI dashboard (Database → Publications → supabase_realtime)
+  — tables enabled: `nodes`, `challenge_votes`, `votes`
+- ✅ Add connections between existing nodes (UI)
+  — `+ Connect` button in detail sidebar opens modal
+  — live search/filter of target nodes (excludes self + already-linked targets)
+  — relationship type picker: `supports | depends | conflicts`
+  — inserts row into `links` table; re-renders graph without full reload
 
 ---
 
 ## 🔜 Up next (priority order)
 
-### 1. Enable Realtime on required tables
-Supabase Realtime must be explicitly enabled per table so that UI
-subscriptions (challenge vote counts, node status updates) fire live.
-- In the Supabase Studio → **Database → Replication**, enable Realtime for:
-  - `nodes` (status changes)
-  - `challenge_votes` (new votes → update badge)
-  - `votes` (node credibility updates)
-- Alternatively, run in SQL Editor:
-  ```sql
-  alter publication supabase_realtime add table public.nodes;
-  alter publication supabase_realtime add table public.challenge_votes;
-  alter publication supabase_realtime add table public.votes;
-  ```
-- Verify that the D3 graph and sidebar react live when a challenge vote is cast.
-
-### 2. Add connections between existing nodes (UI)
-After a node is selected, allow the user to pick a second node and a
-relationship type (`supports | depends | conflicts`) to create a new edge.
-- Add **"+ Connect"** button in the detail sidebar (only when a node is selected)
-- Open a small panel / modal: search/select target node, pick edge type
-- Insert row into `links` table
-- Re-render graph without full reload
-
-### 3. Edge voting system
+### 1. Edge voting system
 Edges (connections) need the same confidence mechanism as nodes.
 - `edge_votes` table: `(edge_id, user_id, vote int, created_at)`
   — unique constraint `(edge_id, user_id)`
@@ -51,23 +35,23 @@ Edges (connections) need the same confidence mechanism as nodes.
 - Edge color driven by vote ratio (same green/yellow/red thresholds as nodes)
 - Vote UI: clicking an edge opens the detail panel with edge info + vote slider
 
-### 4. RLS hardening
+### 2. RLS hardening
 - `votes` — users own only their rows ✅ (already set)
 - `links` — any authenticated user can insert; only author can delete ✅ (already set)
 - `challenge_votes` — users own only their rows ✅ (already set)
 - `nodes` — review: currently author-update only; confirm admin-delete policy
 - `submissions` — review moderator-approve flow
 
-### 5. Node search + filter bar
+### 3. Node search + filter bar
 - Full-text search across `title` and `summary`
 - Filter by `type` (fact / claim / question) and `status`
 - Highlight matched nodes on the graph, grey-out the rest
 
-### 6. User profile & contribution history
+### 4. User profile & contribution history
 - `/profile` view: nodes created, votes cast, challenges submitted
 - Karma score (rough: upvoted facts + resolved challenges)
 
-### 7. Notifications
+### 5. Notifications
 - Realtime Supabase subscription: notify the node author when their node
   gets challenged or reaches the challenge-retirement threshold
 
