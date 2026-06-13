@@ -339,7 +339,7 @@
       if (!el.dataset.linkId) return;
       el.addEventListener('click', e => {
         e.stopPropagation();
-        const linkId = el.dataset.linkId;
+        const linkId = Number(el.dataset.linkId);  // coerce to number — DOM attrs are strings
         const fromId = el.dataset.from;
         const toId   = el.dataset.to;
         if (!linkId) return;
@@ -361,8 +361,10 @@
     if (!e) return;
     const fromNode = byId(e.fromId);
     const toNode   = byId(e.toId);
-    const summary  = state.linkVoteSummary.find(s => s.id === e.linkId);
-    const myVote   = linkVoteByUser(e.linkId);
+    // linkId is already a number (coerced on edge click); guard with Number() for safety
+    const linkId   = Number(e.linkId);
+    const summary  = state.linkVoteSummary.find(s => Number(s.id) === linkId);
+    const myVote   = linkVoteByUser(linkId);
     const total    = summary ? Number(summary.total_votes)    : 0;
     const avg      = summary ? Number(summary.avg_confidence) : null;
     const up       = summary ? Number(summary.up_votes)       : 0;
@@ -628,7 +630,7 @@
     $$('.edge-vote-badge[data-link-id]').forEach(badge => {
       badge.addEventListener('click', e => {
         e.stopPropagation();
-        const linkId  = badge.dataset.linkId;
+        const linkId  = Number(badge.dataset.linkId);  // coerce to number
         const linkObj = state.links.find(l => l.id === linkId);
         if (!linkObj) return;
         state.selectedEdge = { fromId: linkObj.from_id, toId: linkObj.to_id, linkId, kind: linkObj.kind };
