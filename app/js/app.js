@@ -404,24 +404,43 @@
          <small style="opacity:.6">${total} total votes</small>`;
     $('#challengeVoteBar').innerHTML = barHtml;
 
-    const validBtn   = $('#cvValid');
-    const invalidBtn = $('#cvInvalid');
+    const validBtn    = $('#cvValid');
+    const invalidBtn  = $('#cvInvalid');
+    const withdrawBtn = $('#cvWithdraw');
+
     if (userCv) {
-      validBtn.textContent   = userCv.is_valid ? '\u2714 You said: valid' : '\u2714 Valid concern';
-      invalidBtn.textContent = !userCv.is_valid ? '\u2714 You said: no problem' : '\u2717 No problem';
+      validBtn.textContent    = userCv.is_valid ? '\u2714 You said: valid concern' : '\u2714 Valid concern';
+      invalidBtn.textContent  = !userCv.is_valid ? '\u2714 You said: no problem' : '\u2717 No problem';
+      if (withdrawBtn) {
+        withdrawBtn.textContent = '\u2715 Withdraw my vote';
+        withdrawBtn.classList.remove('hidden');
+      }
     } else {
       validBtn.textContent   = '\u2714 Valid concern';
       invalidBtn.textContent = '\u2717 No problem';
+      if (withdrawBtn) withdrawBtn.classList.add('hidden');
     }
 
     section.classList.remove('hidden');
 
-    const newValid   = validBtn.cloneNode(true);
-    const newInvalid = invalidBtn.cloneNode(true);
+    // Replace buttons to remove stale listeners
+    const newValid    = validBtn.cloneNode(true);
+    const newInvalid  = invalidBtn.cloneNode(true);
     validBtn.parentNode.replaceChild(newValid, validBtn);
     invalidBtn.parentNode.replaceChild(newInvalid, invalidBtn);
     newValid.addEventListener('click',   () => submitChallengeVote(ch.id, true));
     newInvalid.addEventListener('click', () => submitChallengeVote(ch.id, false));
+
+    if (withdrawBtn) {
+      const newWithdraw = withdrawBtn.cloneNode(true);
+      withdrawBtn.parentNode.replaceChild(newWithdraw, withdrawBtn);
+      if (userCv) {
+        newWithdraw.classList.remove('hidden');
+        newWithdraw.addEventListener('click', () => withdrawChallengeVote(ch.id));
+      } else {
+        newWithdraw.classList.add('hidden');
+      }
+    }
   }
 
   async function submitChallengeVote(challengeId, isValid) {
@@ -432,16 +451,40 @@
 
     let error;
     if (existing) {
+      // Update existing vote — user changed their mind
       ({ error } = await sb.from('challenge_votes')
         .update({ is_valid: isValid })
         .eq('id', existing.id));
     } else {
+      // New vote — only send the columns that actually exist on the table
       ({ error } = await sb.from('challenge_votes').insert({
         challenge_id: challengeId,
         user_id:      currentUser.id,
         is_valid:     isValid
       }));
     }
+
+    if (error) {
+      notice.textContent = error.message;
+      notice.classList.remove('hidden');
+      return;
+    }
+    notice.classList.add('hidden');
+    await loadAll();
+    renderGraph();
+    renderDetail();
+  }
+
+  async function withdrawChallengeVote(challengeId) {
+    const notice = $('#challengeVoteNotice');
+    const existing = state.challengeVotes.find(
+      cv => cv.challenge_id === challengeId && cv.user_id === currentUser?.id
+    );
+    if (!existing) return;
+
+    const { error } = await sb.from('challenge_votes')
+      .delete()
+      .eq('id', existing.id);
 
     if (error) {
       notice.textContent = error.message;
