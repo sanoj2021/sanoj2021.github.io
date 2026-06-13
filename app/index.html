@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -13,12 +13,6 @@
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar">
-      <div class="brand"><div class="brand-name">ScienceDB</div><span class="pill">alpha</span></div>
-      <nav class="nav" id="navLinks">
-        <a href="#graph" data-view="graph" class="active">Graph</a>
-      </nav>
-    </aside>
     <main class="main">
       <header class="topbar">
         <div>
@@ -26,17 +20,12 @@
           <div class="topbar-sub" id="viewSub">Atomic facts, linked evidence, crowd review</div>
         </div>
         <div class="top-actions">
-          <button class="iconbtn" id="themeBtn" aria-label="Switch to light mode"></button>
+          <button class="iconbtn" id="themeBtn" aria-label="Switch to dark mode"></button>
           <span class="topbar-user pill" id="usernameLabel"></span>
           <button class="btn-ghost" id="logoutBtn">Logout</button>
         </div>
       </header>
       <section class="content">
-        <div class="stats-row">
-          <div class="stat"><div class="stat-k">Facts</div><div class="stat-v" id="statFacts">0</div></div>
-          <div class="stat"><div class="stat-k">Questions</div><div class="stat-v" id="statQuestions">0</div></div>
-          <div class="stat"><div class="stat-k">Challenged</div><div class="stat-v" id="statQueue">0</div></div>
-        </div>
         <div class="graph-layout" id="mainLayout">
           <article class="card graph-card" id="graphPanel">
             <div class="graph-card-header">
