@@ -135,8 +135,12 @@ grant execute on function public.upsert_link_vote(bigint, integer) to authentica
 -- -----------------------------------------------------------
 -- 5. upsert_vote RPC (node credibility votes)
 -- app.js calls: sb.rpc('upsert_vote', { p_node_id, p_value })
+-- DROP first required — PostgreSQL 42P13 prevents CREATE OR REPLACE
+-- from changing the return type of an existing function.
 -- -----------------------------------------------------------
-create or replace function public.upsert_vote(
+drop function if exists public.upsert_vote(text, integer);
+
+create function public.upsert_vote(
   p_node_id text,
   p_value   integer
 )
