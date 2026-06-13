@@ -36,7 +36,7 @@
 
   // ── Theme ────────────────────────────────────────────────────────
   const ICONS = { dark: '\u263e', light: '\u2600' };
-  let theme = document.documentElement.getAttribute('data-theme') || 'dark';
+  let theme = document.documentElement.getAttribute('data-theme') || 'light';
 
   function applyTheme(t) {
     theme = t;
@@ -181,10 +181,16 @@
     return result;
   }
 
+  // Stats elements are optional — they were removed from the UI but
+  // other code still calls renderStats(). Guard each write so absent
+  // elements are silently skipped instead of throwing.
   function renderStats() {
-    $('#statFacts').textContent     = state.nodes.filter(n => n.type === 'fact' || n.type === 'claim').length;
-    $('#statQuestions').textContent = state.nodes.filter(n => n.type === 'question').length;
-    $('#statQueue').textContent     = state.nodes.filter(n => n.status === 'challenged').length;
+    const facts     = $('#statFacts');
+    const questions = $('#statQuestions');
+    const queue     = $('#statQueue');
+    if (facts)     facts.textContent     = state.nodes.filter(n => n.type === 'fact' || n.type === 'claim').length;
+    if (questions) questions.textContent = state.nodes.filter(n => n.type === 'question').length;
+    if (queue)     queue.textContent     = state.nodes.filter(n => n.status === 'challenged').length;
   }
 
   function posOf(id) {
@@ -559,7 +565,6 @@
     const q = (query || '').trim().toLowerCase();
     const list = $('#connectNodeList');
 
-    // Exclude self and nodes already directly connected (outgoing)
     const alreadyLinked = new Set(
       (byId(fromId)?.links || []).map(l => l.to)
     );
@@ -624,7 +629,6 @@
       return;
     }
 
-    // Duplicate check (client-side)
     const alreadyLinked = (byId(fromId)?.links || []).some(l => l.to === toId);
     if (alreadyLinked) {
       notice.textContent = 'A connection from this node to the target already exists.';
@@ -652,7 +656,6 @@
     renderGraph();
     renderDetail();
 
-    // Close modal after short delay so user sees the success message
     setTimeout(() => {
       $('#connectModal').classList.remove('show');
       notice.classList.add('hidden');
@@ -827,10 +830,14 @@
     $('#cancelSource').addEventListener('click', () => $('#addSourceDetails').removeAttribute('open'));
     $('#sourceForm').addEventListener('submit', handleSourceSubmit);
 
-    $('#navLinks').addEventListener('click', e => {
-      const a = e.target.closest('[data-view]');
-      if (a) { e.preventDefault(); setView(a.dataset.view); }
-    });
+    // #navLinks may not exist now that the sidebar is removed — guard it
+    const navLinks = $('#navLinks');
+    if (navLinks) {
+      navLinks.addEventListener('click', e => {
+        const a = e.target.closest('[data-view]');
+        if (a) { e.preventDefault(); setView(a.dataset.view); }
+      });
+    }
 
     $('#filterFacts').addEventListener('click', () => {
       state.linkedFilter = state.linkedFilter === 'facts' ? null : 'facts';
