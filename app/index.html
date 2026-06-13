@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ScienceDB — Graph</title>
+  <title>ScienceDB &mdash; Graph</title>
   <link rel="icon" type="image/svg+xml" href="../favicon.svg">
   <link rel="shortcut icon" href="../favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -53,33 +53,84 @@
               <span class="leg-color" style="color:var(--success,#437a22)">&#9679; accepted</span>
               <span class="leg-color" style="color:var(--warn)">&#9679; contested</span>
               <span class="leg-color" style="color:var(--error)">&#9679; rejected</span>
+              <span class="leg-color" style="color:var(--muted);font-style:italic">edge thickness = vote confidence</span>
             </div>
           </article>
+
+          <!-- Right detail panel: node view + edge view (swapped by JS) -->
           <aside class="card panel" id="detailPanel">
-            <div class="section-title">Selected fact</div>
-            <h2 id="factTitle" class="fact-title"></h2>
-            <div class="badges" id="factMeta"></div>
-            <p id="factSummary" class="fact-summary"></p>
-            <div class="vote-block">
-              <div class="section-title" style="margin:.9rem 0 .45rem">Confidence vote</div>
-              <div class="range-wrap"><input id="voteRange" type="range" min="1" max="5" step="1" /><strong><span id="confidenceValue">4</span> / 5</strong></div>
-            </div>
-            <div class="actions">
-              <button class="btn primary" id="voteBtn">Vote</button>
-              <button class="btn warn" id="factChallengeBtn">Challenge fact</button>
-              <button class="btn connect" id="connectBtn">+ Connect</button>
-            </div>
-            <div class="notice hidden" id="voteNotice"></div>
-            <div id="challengeVoteSection" class="hidden">
-              <div class="section-title" style="margin:1rem 0 .45rem">&#9398; Active challenge</div>
-              <p id="challengeReason" class="fact-summary" style="font-size:.85rem;opacity:.8"></p>
-              <div class="challenge-vote-bar" id="challengeVoteBar"></div>
-              <div class="actions" style="margin-top:.5rem">
-                <button class="btn error" id="cvValid">&#10003; Valid concern</button>
-                <button class="btn" id="cvInvalid">&#10007; No problem</button>
+
+            <!-- NODE DETAIL -->
+            <div id="nodeDetailContent">
+              <div class="section-title">Selected fact</div>
+              <h2 id="factTitle" class="fact-title"></h2>
+              <div class="badges" id="factMeta"></div>
+              <p id="factSummary" class="fact-summary"></p>
+              <div class="vote-block">
+                <div class="section-title" style="margin:.9rem 0 .45rem">Confidence vote</div>
+                <div class="range-wrap"><input id="voteRange" type="range" min="1" max="5" step="1" /><strong><span id="confidenceValue">4</span> / 5</strong></div>
               </div>
-              <div class="notice hidden" id="challengeVoteNotice"></div>
+              <div class="actions">
+                <button class="btn primary" id="voteBtn">Vote</button>
+                <button class="btn warn" id="factChallengeBtn">Challenge fact</button>
+                <button class="btn connect" id="connectBtn">+ Connect</button>
+              </div>
+              <div class="notice hidden" id="voteNotice"></div>
+              <div id="challengeVoteSection" class="hidden">
+                <div class="section-title" style="margin:1rem 0 .45rem">&#9398; Active challenge</div>
+                <p id="challengeReason" class="fact-summary" style="font-size:.85rem;opacity:.8"></p>
+                <div class="challenge-vote-bar" id="challengeVoteBar"></div>
+                <div class="actions" style="margin-top:.5rem">
+                  <button class="btn error" id="cvValid">&#10003; Valid concern</button>
+                  <button class="btn" id="cvInvalid">&#10007; No problem</button>
+                </div>
+                <div class="notice hidden" id="challengeVoteNotice"></div>
+              </div>
             </div>
+            <!-- END NODE DETAIL -->
+
+            <!-- EDGE DETAIL -->
+            <div id="edgeDetailContent" class="hidden">
+              <div class="edge-panel-header">
+                <button class="btn sm" id="edgeBackBtn" aria-label="Back to node">&larr; Back</button>
+                <div class="section-title" id="edgePanelTitle">Selected connection</div>
+              </div>
+
+              <div class="edge-flow">
+                <span class="edge-flow-node" id="edgeFrom"></span>
+                <span class="edge-flow-arrow" id="edgeKindBadge" class="badge"></span>
+                <span class="edge-flow-node" id="edgeTo"></span>
+              </div>
+
+              <div class="edge-vote-summary">
+                <span class="badge" id="edgeVoteLabel">No votes yet</span>
+                <div id="edgeAvgWrap" class="edge-avg-wrap hidden">
+                  <div class="edge-avg-bar-track">
+                    <div class="edge-bar-fill" id="edgeAvgBar" style="width:0%"></div>
+                  </div>
+                  <span class="edge-avg-num"><span id="edgeAvgValue">-</span> / 5</span>
+                </div>
+              </div>
+
+              <div class="vote-block">
+                <div class="section-title" style="margin:.9rem 0 .45rem">Vote on this connection</div>
+                <p style="font-size:.82rem;color:var(--muted);margin-bottom:.5rem">How confident are you that this connection is valid and relevant?</p>
+                <div class="range-wrap">
+                  <input id="edgeVoteRange" type="range" min="1" max="5" step="1" value="3" />
+                  <strong><span id="edgeConfidenceValue">3</span> / 5</strong>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--faint);margin-top:.2rem;padding:0 .1rem">
+                  <span>weak link</span><span>strong link</span>
+                </div>
+              </div>
+
+              <div class="actions">
+                <button class="btn primary" id="edgeVoteBtn">Vote on connection</button>
+              </div>
+              <div class="notice hidden" id="edgeVoteNotice"></div>
+            </div>
+            <!-- END EDGE DETAIL -->
+
           </aside>
         </div>
         <div class="graph-layout" id="lowerLayout">
