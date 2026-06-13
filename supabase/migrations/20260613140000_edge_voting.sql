@@ -58,19 +58,21 @@ group by link_id;
 
 -- -----------------------------------------------------------
 -- 3. node_vote_summary — recreate with avg_confidence + id
--- The initial schema exposed avg_value on node_id, but the
--- JS in app.js expects columns: id, total_votes, up_votes,
+-- PostgreSQL does not allow CREATE OR REPLACE VIEW to drop
+-- columns (error 42P16), so we DROP first then CREATE fresh.
+-- The original view exposed: node_id, avg_value.
+-- The JS in app.js expects: id, total_votes, up_votes,
 -- down_votes, avg_confidence.
--- Also updates the votes table constraint: the original
--- schema restricts value to -1..1 but the UI sends 1..5,
--- so we fix that constraint here.
 -- -----------------------------------------------------------
 
 -- Widen the votes.value constraint to 1..5
 alter table public.votes drop constraint if exists votes_value_check;
 alter table public.votes add  constraint votes_value_check check (value between 1 and 5);
 
-create or replace view public.node_vote_summary as
+-- DROP first (avoids 42P16 — cannot drop columns from view)
+drop view if exists public.node_vote_summary;
+
+create view public.node_vote_summary as
 select
   node_id                                           as id,
   count(*)                                          as total_votes,
@@ -127,7 +129,7 @@ begin
 end;
 $$;
 
--- Grant execute to authenticated and anon roles
+-- Grant execute to authenticated role
 grant execute on function public.upsert_link_vote(bigint, integer) to authenticated;
 
 -- -----------------------------------------------------------
@@ -161,9 +163,3 @@ end;
 $$;
 
 grant execute on function public.upsert_vote(text, integer) to authenticated;
-
--- -----------------------------------------------------------
--- notes for manual apply:
--- Run this file in the Supabase SQL editor or via
--- `supabase db push` after linking your project.
--- -----------------------------------------------------------
