@@ -21,37 +21,35 @@
   — live search/filter of target nodes (excludes self + already-linked targets)
   — relationship type picker: `supports | depends | conflicts`
   — inserts row into `links` table; re-renders graph without full reload
+- ✅ Edge voting system
+  — `edge_votes` table: `(edge_id, user_id, vote int, created_at)` with unique `(edge_id, user_id)` constraint
+  — `edge_vote_summary` view: total votes, up/down ratio
+  — Edge line thickness/opacity driven by vote count
+  — Edge color driven by vote ratio (same green/yellow/red thresholds as nodes)
+  — Clicking an edge opens detail panel with edge info + vote slider
+  — Fixed bigint/string coercion bug (`Number()` coercions in `renderGraph`, `renderEdgeDetail`, `renderLinkedPanel`)
 
 ---
 
 ## 🔜 Up next (priority order)
 
-### 1. Edge voting system
-Edges (connections) need the same confidence mechanism as nodes.
-- `edge_votes` table: `(edge_id, user_id, vote int, created_at)`
-  — unique constraint `(edge_id, user_id)`
-- `edge_vote_summary` view: total votes, up/down ratio
-- Edge line thickness or opacity driven by vote count
-- Edge color driven by vote ratio (same green/yellow/red thresholds as nodes)
-- Vote UI: clicking an edge opens the detail panel with edge info + vote slider
-
-### 2. RLS hardening
+### 1. RLS hardening
 - `votes` — users own only their rows ✅ (already set)
 - `links` — any authenticated user can insert; only author can delete ✅ (already set)
 - `challenge_votes` — users own only their rows ✅ (already set)
 - `nodes` — review: currently author-update only; confirm admin-delete policy
 - `submissions` — review moderator-approve flow
 
-### 3. Node search + filter bar
+### 2. Node search + filter bar
 - Full-text search across `title` and `summary`
 - Filter by `type` (fact / claim / question) and `status`
 - Highlight matched nodes on the graph, grey-out the rest
 
-### 4. User profile & contribution history
+### 3. User profile & contribution history
 - `/profile` view: nodes created, votes cast, challenges submitted
 - Karma score (rough: upvoted facts + resolved challenges)
 
-### 5. Notifications
+### 4. Notifications
 - Realtime Supabase subscription: notify the node author when their node
   gets challenged or reaches the challenge-retirement threshold
 
