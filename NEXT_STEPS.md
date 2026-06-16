@@ -28,28 +28,30 @@
   — Edge color driven by vote ratio (same green/yellow/red thresholds as nodes)
   — Clicking an edge opens detail panel with edge info + vote slider
   — Fixed bigint/string coercion bug (`Number()` coercions in `renderGraph`, `renderEdgeDetail`, `renderLinkedPanel`)
+- ✅ RLS hardening
+  — migration: `supabase/migrations/20260616000000_rls_hardening.sql`
+  — `admins` table added (opt-in allowlist, populated via Supabase dashboard)
+  — `is_admin()` helper function (SECURITY DEFINER, granted to `authenticated`)
+  — `nodes: admin delete` policy — hard-delete cascades to links/votes/challenges
+  — `submissions: own update pending` — submitter can edit content while pending, cannot self-approve
+  — `submissions: moderator update` — admins can approve/reject/reopen
+  — `submissions: own delete pending` — submitter can withdraw their pending submission
+  — **Action required:** insert your user_id into `admins` table via Supabase dashboard to activate admin powers
 
 ---
 
 ## 🔜 Up next (priority order)
 
-### 1. RLS hardening
-- `votes` — users own only their rows ✅ (already set)
-- `links` — any authenticated user can insert; only author can delete ✅ (already set)
-- `challenge_votes` — users own only their rows ✅ (already set)
-- `nodes` — review: currently author-update only; confirm admin-delete policy
-- `submissions` — review moderator-approve flow
-
-### 2. Node search + filter bar
+### 1. Node search + filter bar
 - Full-text search across `title` and `summary`
 - Filter by `type` (fact / claim / question) and `status`
 - Highlight matched nodes on the graph, grey-out the rest
 
-### 3. User profile & contribution history
+### 2. User profile & contribution history
 - `/profile` view: nodes created, votes cast, challenges submitted
 - Karma score (rough: upvoted facts + resolved challenges)
 
-### 4. Notifications
+### 3. Notifications
 - Realtime Supabase subscription: notify the node author when their node
   gets challenged or reaches the challenge-retirement threshold
 
@@ -62,3 +64,4 @@
 | `001_initial_schema` | `supabase/migrations/20260101000000_initial_schema.sql` | Baseline schema: nodes, links, sources, node_sources, votes, challenges, challenge_votes, submissions, views, RLS |
 | `002_challenge_trigger` | `db/migrations/002_challenge_trigger.sql` | Legacy reference copy of the trigger (pre-Supabase CLI) |
 | `challenge_trigger_fix` | `supabase/migrations/20260612121434_challenge_trigger_fix.sql` | Corrected trigger using `target_id`/`target_type` schema — **deployed to production 2026-06-12** |
+| `rls_hardening` | `supabase/migrations/20260616000000_rls_hardening.sql` | `admins` table, `is_admin()` helper, node admin-delete, submissions moderator flow — **deploy to production** |
