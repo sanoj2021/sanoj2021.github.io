@@ -42,4 +42,26 @@
 .edge-bar-fill.low{background:var(--error)}
 .edge-avg-num{font-size:.82rem;color:var(--muted);white-space:nowrap}
 
+/* ── Node search & filter bar ──────────────────────────────────── */
+.search-bar{margin-bottom:.65rem;display:grid;gap:.5rem}
+.search-input-wrap{position:relative;display:flex;align-items:center}
+.search-icon{position:absolute;left:.75rem;color:var(--muted);pointer-events:none;flex-shrink:0}
+#searchInput{width:100%;padding:.6rem .75rem .6rem 2.4rem;border-radius:.8rem;border:1px solid var(--border);background:var(--surface2);font-size:.9rem;transition:border-color .15s,box-shadow .15s}
+#searchInput:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in oklab,var(--primary) 18%,transparent)}
+.search-clear{position:absolute;right:.6rem;background:none;border:none;color:var(--muted);font-size:1.15rem;line-height:1;padding:.2rem .35rem;border-radius:.5rem;cursor:pointer;transition:color .12s,background .12s}
+.search-clear:hover{color:var(--text);background:var(--surface3)}
+.search-filters{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+.search-filter-label{font-size:.78rem;color:var(--faint);font-weight:600;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap}
+.search-filter-sep{flex:1;min-width:.5rem}
+.search-result-count{font-size:.8rem;color:var(--primary);background:var(--primary-soft);padding:.25rem .65rem;border-radius:999px;white-space:nowrap;margin-left:auto}
+
+/* Graph node states when search is active */
+.search-dim circle{opacity:.18!important}
+.search-dim text{opacity:.15!important}
+.search-dim ~ .edge-hit,.search-dim ~ .edge{opacity:.12!important}
+.search-match circle{opacity:1!important}
+.search-match text{opacity:1!important}
+.search-ring{animation:search-pulse 1.8s ease-in-out infinite}
+@keyframes search-pulse{0%,100%{opacity:.55}50%{opacity:.9}}
+
 @media(max-width:980px){.graph-layout{grid-template-columns:1fr}}
