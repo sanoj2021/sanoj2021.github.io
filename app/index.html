@@ -37,6 +37,36 @@
                 <button class="btn sm" id="zoomReset">Reset</button>
               </div>
             </div>
+
+            <!-- Node search & filter bar -->
+            <div class="search-bar" id="searchBar" role="search" aria-label="Search and filter nodes">
+              <div class="search-input-wrap">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input
+                  id="searchInput"
+                  type="search"
+                  placeholder="Search nodes by title or summary&hellip;"
+                  autocomplete="off"
+                  aria-label="Search nodes"
+                />
+                <button id="searchClear" class="search-clear hidden" aria-label="Clear search">&times;</button>
+              </div>
+              <div class="search-filters">
+                <span class="search-filter-label">Type:</span>
+                <button class="filter-pill" data-search-type="fact"     aria-pressed="false">Fact</button>
+                <button class="filter-pill" data-search-type="claim"    aria-pressed="false">Claim</button>
+                <button class="filter-pill" data-search-type="question" aria-pressed="false">Question</button>
+                <span class="search-filter-sep"></span>
+                <span class="search-filter-label">Status:</span>
+                <button class="filter-pill" data-search-status="new"        aria-pressed="false">New</button>
+                <button class="filter-pill" data-search-status="open"       aria-pressed="false">Open</button>
+                <button class="filter-pill" data-search-status="challenged" aria-pressed="false">Challenged</button>
+                <button class="filter-pill" data-search-status="retired"    aria-pressed="false">Retired</button>
+                <span class="search-result-count hidden" id="searchResultCount" aria-live="polite"></span>
+              </div>
+            </div>
+            <!-- End search bar -->
+
             <div class="graph-filters" id="graphFilters">
               <button class="filter-pill" id="filterFacts" aria-pressed="false">Facts only</button>
               <button class="filter-pill" id="filterQuestions" aria-pressed="false">Questions only</button>
