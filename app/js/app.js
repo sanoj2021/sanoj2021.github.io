@@ -1033,6 +1033,26 @@
     $('#themeBtn').addEventListener('click', () => applyTheme(theme === 'dark' ? 'light' : 'dark'));
     $('#logoutBtn').addEventListener('click', async () => { await sb.auth.signOut(); window.location.href = '../'; });
 
+    // ── Profile panel ────────────────────────────────────────────
+    const profileBtn = $('#profileBtn');
+    if (profileBtn) {
+      profileBtn.addEventListener('click', () => {
+        if (window.ProfilePanel) window.ProfilePanel.open(sb, currentUser, state);
+      });
+    }
+    const profileOverlay = $('#profilePanelOverlay');
+    if (profileOverlay) {
+      profileOverlay.addEventListener('click', () => {
+        if (window.ProfilePanel) window.ProfilePanel.close();
+      });
+    }
+    // Keyboard: Escape closes profile panel
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        if (window.ProfilePanel) window.ProfilePanel.close();
+      }
+    });
+
     $('#voteRange').addEventListener('input', e => {
       $('#confidenceValue').textContent = Number(e.target.value).toFixed(1);
     });
