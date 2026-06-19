@@ -42,22 +42,26 @@
   — Filter pills: type (`fact | claim | question`) and status (`new | open | challenged | retired`)
   — Matched nodes highlighted with dashed ring; unmatched nodes dimmed to 12% opacity
   — Live result count badge (`N / total nodes`)
+- ✅ User profile & contribution history
+  — Profile slide-in panel: opens via avatar/username button in topbar, closes via overlay click or Escape
+  — Shows: avatar (initial), display name, email, member-since date
+  — Stats row: nodes created, node votes cast, edge votes cast, challenges filed, karma score
+  — Karma: sum of up-votes on your nodes + 5 pts per resolved challenge you filed
+  — Collapsible sections: Nodes created (newest first, with vote stats), Node vote history, Edge vote history, Challenges filed (with status badge + reason excerpt)
+  — All data sourced from in-memory `state` — no extra DB round-trips on open
+  — Skeleton loading shimmer while fetching
+  — `profile.js` (`app/js/profile.js`) + wiring in `app.js` `bindUI()`
 
 ---
 
 ## 🔜 Up next (priority order)
 
-### 1. User profile & contribution history
-- `/profile` view (slide-in panel): nodes created, votes cast (node + edge), challenges submitted
-- Karma score (rough: upvoted facts + resolved challenges)
-- 🔄 **In progress**
-
-### 2. Node/edge voting history
+### 1. Node/edge voting history
 - Per-node vote history table: who voted what, when (admin only / own votes)
 - Per-edge vote history: same pattern
 - Timeline chart of votes cast over time on a given node/edge
 
-### 3. Notifications
+### 2. Notifications
 - Realtime Supabase subscription: notify the node author when their node
   gets challenged or reaches the challenge-retirement threshold
 
