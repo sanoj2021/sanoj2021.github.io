@@ -37,19 +37,25 @@
   — `submissions: moderator update` — admins can approve/reject/reopen
   — `submissions: own delete pending` — submitter can withdraw their pending submission
   — **Action required:** insert your user_id into `admins` table via Supabase dashboard to activate admin powers
+- ✅ Node search + filter bar
+  — Full-text search across `title` and `summary` (debounced, 180 ms)
+  — Filter pills: type (`fact | claim | question`) and status (`new | open | challenged | retired`)
+  — Matched nodes highlighted with dashed ring; unmatched nodes dimmed to 12% opacity
+  — Live result count badge (`N / total nodes`)
 
 ---
 
 ## 🔜 Up next (priority order)
 
-### 1. Node search + filter bar
-- Full-text search across `title` and `summary`
-- Filter by `type` (fact / claim / question) and `status`
-- Highlight matched nodes on the graph, grey-out the rest
-
-### 2. User profile & contribution history
-- `/profile` view: nodes created, votes cast, challenges submitted
+### 1. User profile & contribution history
+- `/profile` view (slide-in panel): nodes created, votes cast (node + edge), challenges submitted
 - Karma score (rough: upvoted facts + resolved challenges)
+- 🔄 **In progress**
+
+### 2. Node/edge voting history
+- Per-node vote history table: who voted what, when (admin only / own votes)
+- Per-edge vote history: same pattern
+- Timeline chart of votes cast over time on a given node/edge
 
 ### 3. Notifications
 - Realtime Supabase subscription: notify the node author when their node
