@@ -33,7 +33,7 @@ body.profile-open{overflow:hidden}
 /* Avg-confidence label on edge midpoint */
 .edge-label{font-size:9px;fill:var(--muted);pointer-events:none;font-family:Inter,sans-serif}
 
-/* ── Edge detail panel ─────────────────────────────────────────── */
+/* ── Edge detail panel ─────────────────────────────────────────────── */
 .edge-panel-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.85rem}
 .edge-flow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem;padding:.75rem 1rem;border-radius:.75rem;background:var(--surface2);border:1px solid color-mix(in oklab,var(--text) 6%,transparent)}
 .edge-flow-node{font-size:.88rem;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -47,7 +47,7 @@ body.profile-open{overflow:hidden}
 .edge-bar-fill.low{background:var(--error)}
 .edge-avg-num{font-size:.82rem;color:var(--muted);white-space:nowrap}
 
-/* ── Node search & filter bar ─────────────────────────────────── */
+/* ── Node search & filter bar ─────────────────────────────────────── */
 .search-bar{margin-bottom:.65rem;display:grid;gap:.5rem}
 .search-input-wrap{position:relative;display:flex;align-items:center}
 /* Constrain inline icon SVGs to their declared dimensions — never inherit page-level svg rules */
@@ -70,20 +70,23 @@ body.profile-open{overflow:hidden}
 .search-ring{animation:search-pulse 1.8s ease-in-out infinite}
 @keyframes search-pulse{0%,100%{opacity:.55}50%{opacity:.9}}
 
-/* ── Profile button in topbar ───────────────────────────────── */
+/* ── Profile button in topbar ──────────────────────────────────────── */
 .profile-btn{display:inline-flex;align-items:center;gap:.45rem;padding:.55rem .9rem;border-radius:.75rem}
 .profile-btn svg{flex-shrink:0;width:16px!important;height:16px!important}
 
-/* ── Profile slide-in panel ───────────────────────────────── */
+/* ── Profile slide-in panel ────────────────────────────────────────── */
 .profile-overlay{position:fixed;inset:0;background:oklch(0 0 0/.35);opacity:0;pointer-events:none;transition:opacity .25s;z-index:29}
 .profile-overlay.open{opacity:1;pointer-events:auto}
 
-/* Panel is a fixed, full-height flex column.
-   height + overflow:hidden on the panel itself are the key constraints
-   that force the body child to scroll instead of growing infinitely. */
+/*
+  Panel layout: fixed full-height flex column.
+  overflow:hidden on the PANEL clips children to 100dvh.
+  The body child gets flex:1 + min-height:0 so it can shrink
+  below its content height and actually scroll.
+*/
 .profile-panel{
   position:fixed;top:0;right:0;
-  height:100dvh;          /* exact viewport height — no overflow on the panel itself */
+  height:100dvh;
   width:min(480px,100vw);
   background:var(--surface);
   border-left:1px solid color-mix(in oklab,var(--text) 8%,transparent);
@@ -93,7 +96,7 @@ body.profile-open{overflow:hidden}
   z-index:30;
   display:flex;
   flex-direction:column;
-  overflow:hidden;        /* clips children so body can scroll */
+  overflow:hidden;
 }
 .profile-panel.open{transform:translateX(0)}
 
@@ -103,26 +106,31 @@ body.profile-open{overflow:hidden}
   justify-content:space-between;
   padding:1rem 1.25rem;
   border-bottom:1px solid color-mix(in oklab,var(--text) 8%,transparent);
-  flex-shrink:0;          /* never let the header shrink */
+  flex-shrink:0;
 }
 .profile-panel-heading{font-size:1.1rem;font-weight:700}
 
-/* Body fills the remaining height and scrolls.
-   min-height:0 is required so a flex child can shrink below its content height
-   and actually create a scroll region rather than overflowing the panel. */
+/*
+  Body: fills remaining height and scrolls.
+  - flex:1 takes all remaining vertical space after the header
+  - min-height:0 allows the flex child to shrink below content height (required for scroll to work)
+  - overflow-y:auto enables the scrollbar
+  - overscroll-behavior:contain stops scroll events leaking to the page beneath
+  - display:block (NOT flex/grid) so <details> children are block elements
+    that grow to their natural height — flex/grid children get constrained
+    by the parent flex algorithm which can prevent <details> from expanding
+*/
 .profile-panel-body{
   flex:1;
-  min-height:0;           /* THE critical fix for flex scroll children */
+  min-height:0;
   overflow-y:auto;
   overscroll-behavior:contain;
   padding:1.25rem;
-  display:flex;
-  flex-direction:column;
-  gap:1.25rem;
+  display:block;  /* block, not flex/grid — lets <details> expand to full natural height */
 }
 
 /* Profile header: avatar + identity */
-.profile-header{display:flex;align-items:center;gap:1rem}
+.profile-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem}
 .profile-avatar{width:52px;height:52px;border-radius:999px;background:var(--primary-soft);color:var(--primary);font-size:1.4rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:2px solid color-mix(in oklab,var(--primary) 25%,transparent)}
 .profile-identity{min-width:0}
 .profile-name{font-size:1.05rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -130,16 +138,39 @@ body.profile-open{overflow:hidden}
 .profile-joined{font-size:.78rem;color:var(--faint);margin-top:.15rem}
 
 /* Stat row */
-.profile-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:.65rem}
+.profile-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:.65rem;margin-bottom:1.25rem}
 .profile-stat{padding:.65rem .75rem;border-radius:.75rem;background:var(--surface2);border:1px solid color-mix(in oklab,var(--text) 6%,transparent);text-align:center}
 .profile-stat.accent{background:var(--primary-soft);border-color:color-mix(in oklab,var(--primary) 25%,transparent)}
 .profile-stat-val{display:block;font-size:1.4rem;font-weight:700;color:var(--text);line-height:1.1}
 .profile-stat.accent .profile-stat-val{color:var(--primary)}
 .profile-stat-label{display:block;font-size:.72rem;color:var(--muted);margin-top:.2rem;line-height:1.3}
 
-/* Collapsible sections — no max-height cap, unfold fully */
-.profile-section{border:1px solid color-mix(in oklab,var(--text) 7%,transparent);border-radius:.85rem;overflow:hidden}
-.profile-section-title{font-size:.9rem;font-weight:700;padding:.75rem 1rem;cursor:pointer;background:var(--surface2);list-style:none;transition:background .12s}
+/*
+  Collapsible sections.
+  NO overflow:hidden here — that is what was clipping the open <details> content.
+  Border-radius is applied via clip-path workaround or just on the summary/list children.
+  The border still gives the card shape without clipping the content.
+*/
+.profile-section{
+  border:1px solid color-mix(in oklab,var(--text) 7%,transparent);
+  border-radius:.85rem;
+  margin-bottom:.85rem;
+  /* overflow:hidden intentionally removed — it clips <details> open content */
+}
+.profile-section-title{
+  font-size:.9rem;
+  font-weight:700;
+  padding:.75rem 1rem;
+  cursor:pointer;
+  background:var(--surface2);
+  list-style:none;
+  border-radius:.85rem;     /* rounds the summary when closed */
+  transition:background .12s;
+}
+/* When open, only round the top corners of the summary */
+.profile-section[open] > .profile-section-title{
+  border-radius:.85rem .85rem 0 0;
+}
 .profile-section-title:hover{background:var(--surface3)}
 .profile-section-title::-webkit-details-marker{display:none}
 .profile-list{display:grid;gap:.5rem;padding:.75rem}
@@ -156,8 +187,8 @@ body.profile-open{overflow:hidden}
 /* Challenge vote withdraw button */
 #cvWithdraw{color:var(--muted);font-size:.82rem;padding:.4rem .7rem}
 
-/* Skeleton shimmer (reused from app) */
+/* Skeleton shimmer */
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-.skeleton{background:linear-gradient(90deg,var(--surface3) 25%,var(--surface2) 50%,var(--surface3) 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:4px}
+.skeleton{background:linear-gradient(90deg,var(--surface3) 25%,var(--surface2) 50%,var(--surface3) 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:4px;height:1.1rem;margin-bottom:.6rem}
 
 @media(max-width:980px){.graph-layout{grid-template-columns:1fr}}
