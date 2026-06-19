@@ -77,13 +77,49 @@ body.profile-open{overflow:hidden}
 /* ── Profile slide-in panel ───────────────────────────────── */
 .profile-overlay{position:fixed;inset:0;background:oklch(0 0 0/.35);opacity:0;pointer-events:none;transition:opacity .25s;z-index:29}
 .profile-overlay.open{opacity:1;pointer-events:auto}
-.profile-panel{position:fixed;top:0;right:0;height:100dvh;width:min(480px,100vw);background:var(--surface);border-left:1px solid color-mix(in oklab,var(--text) 8%,transparent);box-shadow:var(--shadow-lg);transform:translateX(100%);transition:transform .3s cubic-bezier(.16,1,.3,1);z-index:30;display:flex;flex-direction:column}
+
+/* Panel is a fixed, full-height flex column.
+   height + overflow:hidden on the panel itself are the key constraints
+   that force the body child to scroll instead of growing infinitely. */
+.profile-panel{
+  position:fixed;top:0;right:0;
+  height:100dvh;          /* exact viewport height — no overflow on the panel itself */
+  width:min(480px,100vw);
+  background:var(--surface);
+  border-left:1px solid color-mix(in oklab,var(--text) 8%,transparent);
+  box-shadow:var(--shadow-lg);
+  transform:translateX(100%);
+  transition:transform .3s cubic-bezier(.16,1,.3,1);
+  z-index:30;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;        /* clips children so body can scroll */
+}
 .profile-panel.open{transform:translateX(0)}
-.profile-panel-header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid color-mix(in oklab,var(--text) 8%,transparent);flex-shrink:0}
+
+.profile-panel-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:1rem 1.25rem;
+  border-bottom:1px solid color-mix(in oklab,var(--text) 8%,transparent);
+  flex-shrink:0;          /* never let the header shrink */
+}
 .profile-panel-heading{font-size:1.1rem;font-weight:700}
-/* Panel body fills remaining height and scrolls independently;
-   overscroll-behavior:contain stops scroll chaining to the page */
-.profile-panel-body{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:1.25rem;display:grid;gap:1.25rem;align-content:start}
+
+/* Body fills the remaining height and scrolls.
+   min-height:0 is required so a flex child can shrink below its content height
+   and actually create a scroll region rather than overflowing the panel. */
+.profile-panel-body{
+  flex:1;
+  min-height:0;           /* THE critical fix for flex scroll children */
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding:1.25rem;
+  display:flex;
+  flex-direction:column;
+  gap:1.25rem;
+}
 
 /* Profile header: avatar + identity */
 .profile-header{display:flex;align-items:center;gap:1rem}
@@ -101,7 +137,7 @@ body.profile-open{overflow:hidden}
 .profile-stat.accent .profile-stat-val{color:var(--primary)}
 .profile-stat-label{display:block;font-size:.72rem;color:var(--muted);margin-top:.2rem;line-height:1.3}
 
-/* Collapsible sections */
+/* Collapsible sections — no max-height cap, unfold fully */
 .profile-section{border:1px solid color-mix(in oklab,var(--text) 7%,transparent);border-radius:.85rem;overflow:hidden}
 .profile-section-title{font-size:.9rem;font-weight:700;padding:.75rem 1rem;cursor:pointer;background:var(--surface2);list-style:none;transition:background .12s}
 .profile-section-title:hover{background:var(--surface3)}
