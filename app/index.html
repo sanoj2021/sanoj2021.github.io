@@ -21,7 +21,10 @@
         </div>
         <div class="top-actions">
           <button class="iconbtn" id="themeBtn" aria-label="Switch to dark mode"></button>
-          <span class="topbar-user pill" id="usernameLabel"></span>
+          <button class="btn-ghost profile-btn" id="profileBtn" aria-label="Open profile" title="My profile &amp; contributions">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            <span class="topbar-user pill" id="usernameLabel"></span>
+          </button>
           <button class="btn-ghost" id="logoutBtn">Logout</button>
         </div>
       </header>
@@ -201,6 +204,20 @@
     </main>
   </div>
 
+  <!-- ================================================================ -->
+  <!-- Profile slide-in panel                                           -->
+  <!-- ================================================================ -->
+  <div class="profile-overlay" id="profilePanelOverlay" aria-hidden="true"></div>
+  <aside class="profile-panel" id="profilePanel" role="complementary" aria-label="User profile">
+    <div class="profile-panel-header">
+      <h2 class="profile-panel-heading">My Profile</h2>
+      <button class="iconbtn" data-profile-close aria-label="Close profile">&times;</button>
+    </div>
+    <div class="profile-panel-body" id="profileBody">
+      <!-- Populated by profile.js -->
+    </div>
+  </aside>
+
   <!-- Challenge modal -->
   <div class="modal-backdrop" id="challengeModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal">
@@ -296,6 +313,7 @@
     };
   </script>
   <script src="./js/data.js"></script>
+  <script src="./js/profile.js"></script>
   <script src="./js/app.js"></script>
 </body>
 </html>
