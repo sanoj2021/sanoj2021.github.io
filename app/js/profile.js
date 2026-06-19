@@ -21,12 +21,16 @@
       if (!panel) return;
       panel.classList.add('open');
       document.getElementById('profilePanelOverlay')?.classList.add('open');
+      // Lock background scroll while panel is open
+      document.body.classList.add('profile-open');
       await _render(sb, currentUser, state, panel);
     },
 
     close() {
       document.getElementById('profilePanel')?.classList.remove('open');
       document.getElementById('profilePanelOverlay')?.classList.remove('open');
+      // Restore background scroll
+      document.body.classList.remove('profile-open');
     }
   };
 
