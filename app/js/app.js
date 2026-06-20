@@ -1368,19 +1368,22 @@
   }
 
   async function finishWizardConnections() {
-    const fromId      = wizardState.newNodeId;
-    const targetIds   = [...wizardState.selectedConnections];
+    const fromId    = wizardState.newNodeId;
+    const targetIds = [...wizardState.selectedConnections];
 
     if (targetIds.length > 0) {
       const { error } = await sb.from('links').insert(
         targetIds.map(toId => ({ from_id: fromId, to_id: toId, kind: 'support', created_by: currentUser.id }))
       );
       if (error) {
-        _setWizardInfo('Error creating connections: ' + error.message);
+        // Leave wizard alive so the user can retry Done or hit Cancel.
+        _setWizardInfo('\u274c Error saving connections — click Done to retry, or Cancel to skip.');
         return;
       }
-      await loadAll();
     }
+
+    // Always reload so the new node (and any new links) appear in state.
+    await loadAll();
 
     _detachWizardSubmit();
 
