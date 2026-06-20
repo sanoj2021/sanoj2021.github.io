@@ -8,7 +8,7 @@
 
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
-  const esc = s => String(s ?? '').replace(/[&<>\"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;' }[c]));
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const short = (s, n) => String(s || '').length > n ? String(s).slice(0, n - 1) + '\u2026' : String(s || '');
 
   const VW = 900, VH = 480;
@@ -1114,7 +1114,8 @@
     });
     $('#closeFactModal').addEventListener('click',   () => $('#factModal').classList.remove('show'));
     $('#factModal').addEventListener('click', e => { if (e.target === $('#factModal')) $('#factModal').classList.remove('show'); });
-    $('#factForm').addEventListener('submit', handleFactSubmit);
+    // NOTE: factForm submit is NOT bound here — the wizard attaches/detaches it dynamically.
+    // The fallback handleFactSubmit is only wired when the wizard is NOT active (see startWizard).
 
     $('#connectBtn').addEventListener('click', openConnectModal);
     $('#closeConnectModal').addEventListener('click', () => $('#connectModal').classList.remove('show'));
@@ -1253,8 +1254,43 @@
     if (btn) btn.classList.toggle('visible', !!show);
   }
 
+  // ── Wizard form listener management ─────────────────────────────
+  // Keep a single named reference so we can reliably add/remove it.
+  // Using addEventListener + removeEventListener with the same function
+  // reference is the only safe way to avoid duplicate listeners.
+  function _wizardSubmitHandler(e) {
+    e.preventDefault();
+    const title   = $('#newFactTitle').value.trim();
+    const summary = $('#newFactSummary').value.trim();
+    const type    = $('#newFactType').value;
+    if (!title) {
+      $('#factNotice').textContent = 'Title is required.';
+      $('#factNotice').classList.remove('hidden');
+      return;
+    }
+    wizardState.pendingNode = { title, summary, type };
+    wizardState.newNodeId   = 'f' + Date.now();
+    $('#factModal').classList.remove('show');
+    _enterPlacePhase();
+  }
+
+  function _attachWizardSubmit() {
+    const form = $('#factForm');
+    // Always detach first to ensure no duplicates, then re-attach once.
+    form.removeEventListener('submit', _wizardSubmitHandler);
+    form.removeEventListener('submit', handleFactSubmit);
+    form.addEventListener('submit', _wizardSubmitHandler);
+  }
+
+  function _detachWizardSubmit() {
+    const form = $('#factForm');
+    form.removeEventListener('submit', _wizardSubmitHandler);
+    // Restore normal submit handler for direct (non-wizard) use.
+    form.removeEventListener('submit', handleFactSubmit);
+    form.addEventListener('submit', handleFactSubmit);
+  }
+
   function startWizard() {
-    // Phase 1: open the existing fact form modal to fill in details
     wizardState.phase = 'fill';
     wizardState.newNodeId = null;
     wizardState.ghostPos  = null;
@@ -1265,26 +1301,7 @@
     $('#newFactLinks').value   = '';
     $('#factNotice').classList.add('hidden');
 
-    // Override the form submit to go to place phase instead of saving immediately
-    const form = $('#factForm');
-    const oldSubmit = form.onsubmit;
-    form._wizardSubmit = async function (e) {
-      e.preventDefault();
-      const title   = $('#newFactTitle').value.trim();
-      const summary = $('#newFactSummary').value.trim();
-      const type    = $('#newFactType').value;
-      if (!title) {
-        $('#factNotice').textContent = 'Title is required.';
-        $('#factNotice').classList.remove('hidden');
-        return;
-      }
-      // Store details for later, close modal, go to place phase
-      wizardState.pendingNode = { title, summary, type };
-      wizardState.newNodeId   = 'f' + Date.now();
-      $('#factModal').classList.remove('show');
-      _enterPlacePhase();
-    };
-    form.addEventListener('submit', form._wizardSubmit);
+    _attachWizardSubmit();
 
     $('#factModal').classList.add('show');
     setTimeout(() => $('#newFactTitle').focus(), 80);
@@ -1297,14 +1314,11 @@
   }
 
   async function wizardPlaceNode(svgX, svgY) {
-    // Clamp within canvas bounds
     const x = Math.max(30, Math.min(VW - 30, svgX));
     const y = Math.max(30, Math.min(VH - 30, svgY));
 
-    // Save position for the new node
     state.positions[wizardState.newNodeId] = [x, y];
 
-    // Persist node to Supabase
     const { title, summary, type } = wizardState.pendingNode;
     const { error } = await sb.from('nodes').insert({
       id:          wizardState.newNodeId,
@@ -1324,7 +1338,6 @@
 
     await loadAll();
 
-    // Move to connecting phase
     wizardState.phase = 'connecting';
     state.currentId   = wizardState.newNodeId;
     _setWizardInfo('Step 2 of 2 — click existing nodes to connect (0 selected). Click "Done" when finished.');
@@ -1334,21 +1347,13 @@
   }
 
   function cancelWizard() {
-    // Remove partially created node if it was already placed
     if (wizardState.newNodeId && wizardState.phase === 'connecting') {
-      // best-effort cleanup: remove from local state
       state.nodes = state.nodes.filter(n => n.id !== wizardState.newNodeId);
       delete state.positions[wizardState.newNodeId];
-      // fire-and-forget delete from DB
       sb.from('nodes').delete().eq('id', wizardState.newNodeId).then(() => {});
     }
 
-    // Clean up wizard form override
-    const form = $('#factForm');
-    if (form._wizardSubmit) {
-      form.removeEventListener('submit', form._wizardSubmit);
-      delete form._wizardSubmit;
-    }
+    _detachWizardSubmit();
 
     wizardState.phase = 'idle';
     wizardState.newNodeId = null;
@@ -1377,12 +1382,7 @@
       await loadAll();
     }
 
-    // Clean up wizard form override
-    const form = $('#factForm');
-    if (form._wizardSubmit) {
-      form.removeEventListener('submit', form._wizardSubmit);
-      delete form._wizardSubmit;
-    }
+    _detachWizardSubmit();
 
     wizardState.phase = 'idle';
     wizardState.newNodeId = null;
