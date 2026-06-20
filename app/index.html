@@ -77,6 +77,13 @@
             </div>
             <div class="graph-canvas" id="graphCanvas">
               <svg id="graphSvg" aria-label="Fact graph"></svg>
+              <!-- Wizard: info banner (shown during placing + connecting phases) -->
+              <div class="wizard-info" id="wizardInfo" role="status" aria-live="polite">
+                <span id="wizardInfoText"></span>
+                <button class="wizard-info-cancel" id="wizardCancelBtn" aria-label="Cancel wizard">&times;</button>
+              </div>
+              <!-- Wizard: done button (shown during connecting phase) -->
+              <button class="wizard-done-btn" id="wizardDoneBtn" aria-label="Finish connecting nodes">Done</button>
             </div>
             <div class="legend">
               <span class="leg support">&#x2192; supports</span>
