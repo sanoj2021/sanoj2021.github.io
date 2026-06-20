@@ -8,7 +8,7 @@
 
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
-  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const esc = s => String(s ?? '').replace(/[&<>\"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;' }[c]));
   const short = (s, n) => String(s || '').length > n ? String(s).slice(0, n - 1) + '\u2026' : String(s || '');
 
   const VW = 900, VH = 480;
@@ -324,6 +324,10 @@
     const _sa = searchActive();
     const matchIds = _sa ? new Set(state.nodes.filter(matchesSearch).map(n => n.id)) : null;
 
+    // Wizard connecting phase: build connectable set
+    const wizConnecting = wizardState.phase === 'connecting';
+    const ghostId = wizardState.newNodeId;
+
     let nodes = '';
     state.nodes.forEach(n => {
       if (visibleIds && !visibleIds.has(n.id)) return;
@@ -353,7 +357,12 @@
         ? `<circle class="search-ring" cx="${x}" cy="${y}" r="${r + 6}" fill="none" stroke="var(--primary)" stroke-width="2" opacity="0.55" stroke-dasharray="4 3"/>`
         : '';
 
-      nodes += `<g class="node${active ? ' active-node' : ''}${dimCls}" data-id="${n.id}" role="button" aria-label="${esc(short(n.title,60))}" style="opacity:${nodeOpacity}">
+      // Wizard connectable ring
+      const isConnectable = wizConnecting && n.id !== ghostId;
+      const isSelectedConn = isConnectable && wizardState.selectedConnections.has(n.id);
+      const connectableClass = isConnectable ? (isSelectedConn ? ' connectable selected-conn' : ' connectable') : '';
+
+      nodes += `<g class="node${active ? ' active-node' : ''}${dimCls}${connectableClass}" data-id="${n.id}" role="button" aria-label="${esc(short(n.title,60))}" style="opacity:${nodeOpacity}">
         ${ring}
         <circle cx="${x}" cy="${y}" r="${r}" fill="${fill}"/>
         <circle cx="${x}" cy="${y}" r="7" fill="${dot}"/>
@@ -362,11 +371,36 @@
       </g>`;
     });
 
-    svg.innerHTML = defs + `<g id="graphRoot" transform="translate(${vx},${vy}) scale(${vscale})">${edges}${nodes}</g>`;
+    // Ghost node marker (wizard place phase)
+    let ghostHtml = '';
+    if (wizardState.phase === 'place' && wizardState.ghostPos) {
+      const [gx, gy] = wizardState.ghostPos;
+      ghostHtml = `<g class="wizard-ghost" transform="translate(${gx},${gy})">
+        <circle r="26" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="6 4" opacity="0.7"/>
+        <text y="5" text-anchor="middle" font-size="20" fill="var(--primary)" opacity="0.8">+</text>
+      </g>`;
+    }
+
+    svg.innerHTML = defs + `<g id="graphRoot" transform="translate(${vx},${vy}) scale(${vscale})">${edges}${nodes}${ghostHtml}</g>`;
 
     // Node click
     $$('.node').forEach(el => el.addEventListener('click', e => {
       e.stopPropagation();
+
+      // Wizard connecting phase: toggle connection target
+      if (wizardState.phase === 'connecting' && el.dataset.id !== wizardState.newNodeId) {
+        const nid = el.dataset.id;
+        if (wizardState.selectedConnections.has(nid)) {
+          wizardState.selectedConnections.delete(nid);
+        } else {
+          wizardState.selectedConnections.add(nid);
+        }
+        const count = wizardState.selectedConnections.size;
+        _setWizardInfo(`Step 2 of 2 — click existing nodes to connect (${count} selected). Click "Done" when finished.`);
+        renderGraph();
+        return;
+      }
+
       state.selectedEdge = null;
       state.currentId = el.dataset.id;
       renderGraph();
@@ -1075,9 +1109,8 @@
     $('#challengeForm').addEventListener('submit', handleChallengeSubmit);
 
     $('#addFactBtn').addEventListener('click', () => {
-      $('#newFactTitle').value = ''; $('#newFactSummary').value = ''; $('#newFactLinks').value = '';
-      $('#factNotice').classList.add('hidden');
-      $('#factModal').classList.add('show');
+      // Use wizard instead of the plain modal
+      startWizard();
     });
     $('#closeFactModal').addEventListener('click',   () => $('#factModal').classList.remove('show'));
     $('#factModal').addEventListener('click', e => { if (e.target === $('#factModal')) $('#factModal').classList.remove('show'); });
@@ -1124,6 +1157,13 @@
     $('#zoomOut').addEventListener('click',   () => zoomBy(0.83));
     $('#zoomReset').addEventListener('click', () => { vx = 0; vy = 0; vscale = 1; applyTransform(); });
 
+    // ── Wizard UI bindings ───────────────────────────────────────
+    const wizardCancelBtn = $('#wizardCancelBtn');
+    if (wizardCancelBtn) wizardCancelBtn.addEventListener('click', cancelWizard);
+
+    const wizardDoneBtn = $('#wizardDoneBtn');
+    if (wizardDoneBtn) wizardDoneBtn.addEventListener('click', finishWizardConnections);
+
     bindSearchUI();
   }
 
@@ -1141,6 +1181,18 @@
 
     canvas.onpointerdown = e => {
       if (e.target.closest('.node') || e.target.closest('.edge') || e.target.closest('.edge-hit')) return;
+
+      // Wizard place phase: clicking the canvas sets ghost / places node
+      if (wizardState.phase === 'place') {
+        const rect = svg.getBoundingClientRect();
+        const cx = (e.clientX - rect.left) * (VW / rect.width) - vx;
+        const cy = (e.clientY - rect.top)  * (VH / rect.height) - vy;
+        const svgX = cx / vscale;
+        const svgY = cy / vscale;
+        wizardPlaceNode(svgX, svgY);
+        return;
+      }
+
       canvas.setPointerCapture(e.pointerId);
       dragging = true; startX = e.clientX; startY = e.clientY; startVx = vx; startVy = vy;
     };
@@ -1172,6 +1224,176 @@
     vy = cy - (cy - vy) * (ns / vscale);
     vscale = ns;
     clampTransform(); applyTransform();
+  }
+
+  // ── Wizard state machine ─────────────────────────────────────────
+  // Phases: idle → fill → place → connecting → done
+  const wizardState = {
+    phase: 'idle',          // 'idle' | 'fill' | 'place' | 'connecting'
+    newNodeId: null,        // generated ID for the new node
+    ghostPos: null,         // [svgX, svgY] while hovering in place phase
+    selectedConnections: new Set()  // node IDs to connect to
+  };
+
+  function _setWizardInfo(msg) {
+    const info = $('#wizardInfo');
+    const text = $('#wizardInfoText');
+    if (!info || !text) return;
+    text.textContent = msg;
+    info.classList.add('visible');
+  }
+
+  function _hideWizardInfo() {
+    const info = $('#wizardInfo');
+    if (info) info.classList.remove('visible');
+  }
+
+  function _showDoneBtn(show) {
+    const btn = $('#wizardDoneBtn');
+    if (btn) btn.classList.toggle('visible', !!show);
+  }
+
+  function startWizard() {
+    // Phase 1: open the existing fact form modal to fill in details
+    wizardState.phase = 'fill';
+    wizardState.newNodeId = null;
+    wizardState.ghostPos  = null;
+    wizardState.selectedConnections = new Set();
+
+    $('#newFactTitle').value   = '';
+    $('#newFactSummary').value = '';
+    $('#newFactLinks').value   = '';
+    $('#factNotice').classList.add('hidden');
+
+    // Override the form submit to go to place phase instead of saving immediately
+    const form = $('#factForm');
+    const oldSubmit = form.onsubmit;
+    form._wizardSubmit = async function (e) {
+      e.preventDefault();
+      const title   = $('#newFactTitle').value.trim();
+      const summary = $('#newFactSummary').value.trim();
+      const type    = $('#newFactType').value;
+      if (!title) {
+        $('#factNotice').textContent = 'Title is required.';
+        $('#factNotice').classList.remove('hidden');
+        return;
+      }
+      // Store details for later, close modal, go to place phase
+      wizardState.pendingNode = { title, summary, type };
+      wizardState.newNodeId   = 'f' + Date.now();
+      $('#factModal').classList.remove('show');
+      _enterPlacePhase();
+    };
+    form.addEventListener('submit', form._wizardSubmit);
+
+    $('#factModal').classList.add('show');
+    setTimeout(() => $('#newFactTitle').focus(), 80);
+  }
+
+  function _enterPlacePhase() {
+    wizardState.phase = 'place';
+    _setWizardInfo('Step 1 of 2 — click anywhere on the canvas to place the new node.');
+    _showDoneBtn(false);
+  }
+
+  async function wizardPlaceNode(svgX, svgY) {
+    // Clamp within canvas bounds
+    const x = Math.max(30, Math.min(VW - 30, svgX));
+    const y = Math.max(30, Math.min(VH - 30, svgY));
+
+    // Save position for the new node
+    state.positions[wizardState.newNodeId] = [x, y];
+
+    // Persist node to Supabase
+    const { title, summary, type } = wizardState.pendingNode;
+    const { error } = await sb.from('nodes').insert({
+      id:          wizardState.newNodeId,
+      title,
+      summary,
+      type,
+      status:      'new',
+      confidence:  3.0,
+      votes_count: 0,
+      created_by:  currentUser.id
+    });
+
+    if (error) {
+      _setWizardInfo('Error saving node: ' + error.message);
+      return;
+    }
+
+    await loadAll();
+
+    // Move to connecting phase
+    wizardState.phase = 'connecting';
+    state.currentId   = wizardState.newNodeId;
+    _setWizardInfo('Step 2 of 2 — click existing nodes to connect (0 selected). Click "Done" when finished.');
+    _showDoneBtn(true);
+    renderGraph();
+    renderDetail();
+  }
+
+  function cancelWizard() {
+    // Remove partially created node if it was already placed
+    if (wizardState.newNodeId && wizardState.phase === 'connecting') {
+      // best-effort cleanup: remove from local state
+      state.nodes = state.nodes.filter(n => n.id !== wizardState.newNodeId);
+      delete state.positions[wizardState.newNodeId];
+      // fire-and-forget delete from DB
+      sb.from('nodes').delete().eq('id', wizardState.newNodeId).then(() => {});
+    }
+
+    // Clean up wizard form override
+    const form = $('#factForm');
+    if (form._wizardSubmit) {
+      form.removeEventListener('submit', form._wizardSubmit);
+      delete form._wizardSubmit;
+    }
+
+    wizardState.phase = 'idle';
+    wizardState.newNodeId = null;
+    wizardState.ghostPos  = null;
+    wizardState.selectedConnections = new Set();
+
+    _hideWizardInfo();
+    _showDoneBtn(false);
+    $('#factModal').classList.remove('show');
+    renderGraph();
+    renderStats();
+  }
+
+  async function finishWizardConnections() {
+    const fromId      = wizardState.newNodeId;
+    const targetIds   = [...wizardState.selectedConnections];
+
+    if (targetIds.length > 0) {
+      const { error } = await sb.from('links').insert(
+        targetIds.map(toId => ({ from_id: fromId, to_id: toId, kind: 'support', created_by: currentUser.id }))
+      );
+      if (error) {
+        _setWizardInfo('Error creating connections: ' + error.message);
+        return;
+      }
+      await loadAll();
+    }
+
+    // Clean up wizard form override
+    const form = $('#factForm');
+    if (form._wizardSubmit) {
+      form.removeEventListener('submit', form._wizardSubmit);
+      delete form._wizardSubmit;
+    }
+
+    wizardState.phase = 'idle';
+    wizardState.newNodeId = null;
+    wizardState.ghostPos  = null;
+    wizardState.selectedConnections = new Set();
+
+    _hideWizardInfo();
+    _showDoneBtn(false);
+    renderGraph();
+    renderDetail();
+    renderStats();
   }
 
   init().catch(err => {
