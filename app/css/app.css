@@ -11,7 +11,7 @@ body.profile-open{overflow:hidden}
 .content{padding:1.25rem;display:grid;gap:1rem;flex:1}
 /* Main graph layout: graph column grows, detail panel stays fixed-ish width */
 .graph-layout{display:grid;grid-template-columns:1fr 360px;gap:1rem}
-.card{background:var(--surface);border:1px solid color-mix(in oklab,var(--text) 8%,transparent);border-radius:1rem;box-shadow:var(--shadow-sm)}.graph-card{padding:1rem}.graph-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem}.zoom-controls{display:flex;gap:.4rem;align-items:center}.section-title{font-size:.95rem;font-weight:700}
+.card{background:var(--surface);border:1px solid color-mix(in oklab,var(--text) 8%,transparent);border-radius:1rem;box-shadow:var(--shadow-sm)}.graph-card{padding:1rem;position:relative}.graph-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem}.zoom-controls{display:flex;gap:.4rem;align-items:center}.section-title{font-size:.95rem;font-weight:700}
 /* Filter pill toggles above the canvas */
 .graph-filters{display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem;flex-wrap:wrap}.filter-pill{padding:.35rem .85rem;border-radius:999px;border:1px solid color-mix(in oklab,var(--text) 12%,transparent);background:var(--surface2);font-size:.82rem;color:var(--muted);transition:background .15s,color .15s,border-color .15s}.filter-pill:hover{background:var(--surface3);color:var(--text)}.filter-pill[aria-pressed="true"]{background:var(--primary-soft);color:var(--primary);border-color:var(--primary)}.filter-hint{font-size:.8rem;color:var(--faint);margin-left:.25rem}
 /* Graph canvas */
@@ -78,12 +78,6 @@ body.profile-open{overflow:hidden}
 .profile-overlay{position:fixed;inset:0;background:oklch(0 0 0/.35);opacity:0;pointer-events:none;transition:opacity .25s;z-index:29}
 .profile-overlay.open{opacity:1;pointer-events:auto}
 
-/*
-  Panel layout: fixed full-height flex column.
-  overflow:hidden on the PANEL clips children to 100dvh.
-  The body child gets flex:1 + min-height:0 so it can shrink
-  below its content height and actually scroll.
-*/
 .profile-panel{
   position:fixed;top:0;right:0;
   height:100dvh;
@@ -110,23 +104,13 @@ body.profile-open{overflow:hidden}
 }
 .profile-panel-heading{font-size:1.1rem;font-weight:700}
 
-/*
-  Body: fills remaining height and scrolls.
-  - flex:1 takes all remaining vertical space after the header
-  - min-height:0 allows the flex child to shrink below content height (required for scroll to work)
-  - overflow-y:auto enables the scrollbar
-  - overscroll-behavior:contain stops scroll events leaking to the page beneath
-  - display:block (NOT flex/grid) so <details> children are block elements
-    that grow to their natural height — flex/grid children get constrained
-    by the parent flex algorithm which can prevent <details> from expanding
-*/
 .profile-panel-body{
   flex:1;
   min-height:0;
   overflow-y:auto;
   overscroll-behavior:contain;
   padding:1.25rem;
-  display:block;  /* block, not flex/grid — lets <details> expand to full natural height */
+  display:block;
 }
 
 /* Profile header: avatar + identity */
@@ -145,17 +129,10 @@ body.profile-open{overflow:hidden}
 .profile-stat.accent .profile-stat-val{color:var(--primary)}
 .profile-stat-label{display:block;font-size:.72rem;color:var(--muted);margin-top:.2rem;line-height:1.3}
 
-/*
-  Collapsible sections.
-  NO overflow:hidden here — that is what was clipping the open <details> content.
-  Border-radius is applied via clip-path workaround or just on the summary/list children.
-  The border still gives the card shape without clipping the content.
-*/
 .profile-section{
   border:1px solid color-mix(in oklab,var(--text) 7%,transparent);
   border-radius:.85rem;
   margin-bottom:.85rem;
-  /* overflow:hidden intentionally removed — it clips <details> open content */
 }
 .profile-section-title{
   font-size:.9rem;
@@ -164,10 +141,9 @@ body.profile-open{overflow:hidden}
   cursor:pointer;
   background:var(--surface2);
   list-style:none;
-  border-radius:.85rem;     /* rounds the summary when closed */
+  border-radius:.85rem;
   transition:background .12s;
 }
-/* When open, only round the top corners of the summary */
 .profile-section[open] > .profile-section-title{
   border-radius:.85rem .85rem 0 0;
 }
@@ -194,23 +170,24 @@ body.profile-open{overflow:hidden}
 @media(max-width:980px){.graph-layout{grid-template-columns:1fr}}
 
 /* ── Add-node wizard ───────────────────────────────────────────────── */
-
 /*
-  IMPORTANT: both wizard elements use position:fixed (not absolute).
-  The graph canvas has overflow:hidden, and #graphSvg fills the full
-  canvas area — if these were position:absolute they would be clipped
-  by the canvas and the SVG would swallow their pointer events.
-  position:fixed escapes both constraints and z-index:50 puts them
-  above modals (z-index:20) and the profile panel (z-index:30).
+  Wizard elements are siblings of .graph-canvas inside .graph-card.
+  .graph-card has position:relative so these absolute children anchor
+  to the card, not the viewport. They overlay the bottom of the canvas
+  without being clipped by canvas overflow:hidden or covered by the SVG.
+  z-index:10 is sufficient — nothing else in the card competes.
 */
 
 /* Info banner shown during wizard phases */
 .wizard-info{
-  position:fixed;
-  bottom:1.5rem;
+  position:absolute;
+  /* Sits at the bottom of the canvas: canvas is ~540px tall,
+     card has 1rem padding top, header ~2.5rem, search ~5rem, filters ~2rem
+     = roughly top offset to align with canvas bottom minus 1rem gap */
+  bottom:3.5rem; /* sits above the legend row */
   left:50%;
   transform:translateX(-50%);
-  z-index:50;
+  z-index:10;
   display:flex;
   align-items:center;
   gap:.75rem;
@@ -246,10 +223,10 @@ body.profile-open{overflow:hidden}
 
 /* Done button shown in connecting phase */
 .wizard-done-btn{
-  position:fixed;
-  bottom:1.5rem;
-  right:1.5rem;
-  z-index:50;
+  position:absolute;
+  bottom:3.5rem; /* same vertical band as the info banner */
+  right:1rem;
+  z-index:10;
   padding:.6rem 1.2rem;
   border-radius:.8rem;
   background:var(--primary);
