@@ -325,7 +325,8 @@
     const matchIds = _sa ? new Set(state.nodes.filter(matchesSearch).map(n => n.id)) : null;
 
     // Wizard connecting phase: build connectable set
-    const wizConnecting = wizardState.phase === 'connecting';
+    // Covers both 'connecting' (add-node wizard) and 'connect' (connect-existing wizard)
+    const wizConnecting = wizardState.phase === 'connecting' || wizardState.phase === 'connect';
     const ghostId = wizardState.newNodeId;
 
     let nodes = '';
@@ -357,8 +358,8 @@
         ? `<circle class="search-ring" cx="${x}" cy="${y}" r="${r + 6}" fill="none" stroke="var(--primary)" stroke-width="2" opacity="0.55" stroke-dasharray="4 3"/>`
         : '';
 
-      // Wizard connectable ring
-      const isConnectable = wizConnecting && n.id !== ghostId;
+      // Connectable: exclude the ghost (add-node wizard) AND the fromId (connect wizard)
+      const isConnectable = wizConnecting && n.id !== ghostId && n.id !== wizardState.fromId;
       const isSelectedConn = isConnectable && wizardState.selectedConnections.has(n.id);
       const connectableClass = isConnectable ? (isSelectedConn ? ' connectable selected-conn' : ' connectable') : '';
 
@@ -387,8 +388,13 @@
     $$('.node').forEach(el => el.addEventListener('click', e => {
       e.stopPropagation();
 
-      // Wizard connecting phase: toggle connection target
-      if (wizardState.phase === 'connecting' && el.dataset.id !== wizardState.newNodeId) {
+      // Wizard connecting phases: toggle connection target
+      // Covers both 'connecting' (add-node wizard step 2) and 'connect' (connect-existing wizard)
+      if (
+        (wizardState.phase === 'connecting' || wizardState.phase === 'connect') &&
+        el.dataset.id !== wizardState.newNodeId &&
+        el.dataset.id !== wizardState.fromId
+      ) {
         const nid = el.dataset.id;
         if (wizardState.selectedConnections.has(nid)) {
           wizardState.selectedConnections.delete(nid);
@@ -396,7 +402,13 @@
           wizardState.selectedConnections.add(nid);
         }
         const count = wizardState.selectedConnections.size;
-        _setWizardInfo(`Step 2 of 2 — click existing nodes to connect (${count} selected). Click "Done" when finished.`);
+
+        if (wizardState.phase === 'connecting') {
+          _setWizardInfo(`Step 2 of 2 — click existing nodes to connect (${count} selected). Click "Done" when finished.`);
+        } else {
+          // 'connect' phase — banner has the kind select injected, preserve it
+          _updateConnectBanner(count);
+        }
         renderGraph();
         return;
       }
@@ -1117,7 +1129,9 @@
     // NOTE: factForm submit is NOT bound here — the wizard attaches/detaches it dynamically.
     // The fallback handleFactSubmit is only wired when the wizard is NOT active (see startWizard).
 
-    $('#connectBtn').addEventListener('click', openConnectModal);
+    // ── Step 1: connectBtn now launches the connect wizard ───────
+    $('#connectBtn').addEventListener('click', startConnectWizard);
+
     $('#closeConnectModal').addEventListener('click', () => $('#connectModal').classList.remove('show'));
     $('#connectModal').addEventListener('click', e => { if (e.target === $('#connectModal')) $('#connectModal').classList.remove('show'); });
     $('#connectSearch').addEventListener('input', e => populateConnectList(e.target.value));
@@ -1229,9 +1243,11 @@
 
   // ── Wizard state machine ─────────────────────────────────────────
   // Phases: idle → fill → place → connecting → done
+  //         idle → connect (connect-existing wizard)
   const wizardState = {
-    phase: 'idle',          // 'idle' | 'fill' | 'place' | 'connecting'
-    newNodeId: null,        // generated ID for the new node
+    phase: 'idle',          // 'idle' | 'fill' | 'place' | 'connecting' | 'connect'
+    newNodeId: null,        // generated ID for the new node (add-node wizard)
+    fromId: null,           // source node for connect-existing wizard
     ghostPos: null,         // [svgX, svgY] while hovering in place phase
     selectedConnections: new Set()  // node IDs to connect to
   };
@@ -1254,10 +1270,35 @@
     if (btn) btn.classList.toggle('visible', !!show);
   }
 
+  // ── Step 3: kind-select helpers ──────────────────────────────────
+  function _injectKindSelect() {
+    if ($('#wizardKindSelect')) return; // already present
+    const info = $('#wizardInfo');
+    if (!info) return;
+    const sel = document.createElement('select');
+    sel.id = 'wizardKindSelect';
+    sel.setAttribute('aria-label', 'Relationship type');
+    sel.innerHTML =
+      '<option value="support">supports</option>' +
+      '<option value="depend">depends</option>' +
+      '<option value="conflict">conflicts</option>';
+    // Insert before the cancel button
+    const cancelBtn = $('#wizardCancelBtn');
+    info.insertBefore(sel, cancelBtn);
+  }
+
+  function _removeKindSelect() {
+    const sel = $('#wizardKindSelect');
+    if (sel) sel.remove();
+  }
+
+  // Live-update banner text for the 'connect' phase
+  function _updateConnectBanner(count) {
+    const text = $('#wizardInfoText');
+    if (text) text.textContent = `Click nodes to connect (${count} selected) — pick relationship type, then click Done.`;
+  }
+
   // ── Wizard form listener management ─────────────────────────────
-  // Keep a single named reference so we can reliably add/remove it.
-  // Using addEventListener + removeEventListener with the same function
-  // reference is the only safe way to avoid duplicate listeners.
   function _wizardSubmitHandler(e) {
     e.preventDefault();
     const title   = $('#newFactTitle').value.trim();
@@ -1276,7 +1317,6 @@
 
   function _attachWizardSubmit() {
     const form = $('#factForm');
-    // Always detach first to ensure no duplicates, then re-attach once.
     form.removeEventListener('submit', _wizardSubmitHandler);
     form.removeEventListener('submit', handleFactSubmit);
     form.addEventListener('submit', _wizardSubmitHandler);
@@ -1285,7 +1325,6 @@
   function _detachWizardSubmit() {
     const form = $('#factForm');
     form.removeEventListener('submit', _wizardSubmitHandler);
-    // Restore normal submit handler for direct (non-wizard) use.
     form.removeEventListener('submit', handleFactSubmit);
     form.addEventListener('submit', handleFactSubmit);
   }
@@ -1346,6 +1385,22 @@
     renderDetail();
   }
 
+  // ── Step 1: connect-existing wizard entry point ──────────────────
+  function startConnectWizard() {
+    const fromNode = byId(state.currentId);
+    if (!fromNode) return;
+
+    wizardState.phase = 'connect';
+    wizardState.fromId = state.currentId;
+    wizardState.selectedConnections = new Set();
+
+    // Step 3: inject kind select into banner
+    _setWizardInfo(`Click nodes to connect (0 selected) — pick relationship type, then click Done.`);
+    _injectKindSelect();
+    _showDoneBtn(true);
+    renderGraph();
+  }
+
   function cancelWizard() {
     if (wizardState.newNodeId && wizardState.phase === 'connecting') {
       state.nodes = state.nodes.filter(n => n.id !== wizardState.newNodeId);
@@ -1355,19 +1410,53 @@
 
     _detachWizardSubmit();
 
+    // Step 4: clear connect-wizard specific state
     wizardState.phase = 'idle';
     wizardState.newNodeId = null;
+    wizardState.fromId    = null;
     wizardState.ghostPos  = null;
     wizardState.selectedConnections = new Set();
 
     _hideWizardInfo();
     _showDoneBtn(false);
+    _removeKindSelect();   // Step 3/4: remove select from banner
     $('#factModal').classList.remove('show');
     renderGraph();
     renderStats();
   }
 
   async function finishWizardConnections() {
+    // ── Step 4: connect-existing wizard ─────────────────────────
+    if (wizardState.phase === 'connect') {
+      const fromId    = wizardState.fromId;
+      const targetIds = [...wizardState.selectedConnections];
+      const kind      = $('#wizardKindSelect')?.value || 'support';
+
+      if (targetIds.length > 0) {
+        const { error } = await sb.from('links').insert(
+          targetIds.map(toId => ({ from_id: fromId, to_id: toId, kind, created_by: currentUser.id }))
+        );
+        if (error) {
+          _setWizardInfo('\u274c Error saving connections — click Done to retry, or Cancel to skip.');
+          return;
+        }
+      }
+
+      await loadAll();
+
+      wizardState.phase = 'idle';
+      wizardState.fromId = null;
+      wizardState.selectedConnections = new Set();
+
+      _hideWizardInfo();
+      _showDoneBtn(false);
+      _removeKindSelect();
+      renderGraph();
+      renderDetail();
+      return;
+    }
+
+    // ── Original: add-node wizard 'connecting' phase ─────────────
     const fromId    = wizardState.newNodeId;
     const targetIds = [...wizardState.selectedConnections];
 
@@ -1376,13 +1465,11 @@
         targetIds.map(toId => ({ from_id: fromId, to_id: toId, kind: 'support', created_by: currentUser.id }))
       );
       if (error) {
-        // Leave wizard alive so the user can retry Done or hit Cancel.
         _setWizardInfo('\u274c Error saving connections — click Done to retry, or Cancel to skip.');
         return;
       }
     }
 
-    // Always reload so the new node (and any new links) appear in state.
     await loadAll();
 
     _detachWizardSubmit();
