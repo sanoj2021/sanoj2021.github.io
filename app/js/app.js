@@ -264,11 +264,9 @@
     if (g) g.setAttribute('transform', `translate(${vx},${vy}) scale(${vscale})`);
   }
 
-  function clampTransform() {
-    const margin = 200, w = VW * vscale, h = VH * vscale;
-    vx = Math.min(margin, Math.max(VW - w - margin, vx));
-    vy = Math.min(margin, Math.max(VH - h - margin, vy));
-  }
+  // No clamping — allow free panning so nodes near the edges of the
+  // canvas remain reachable at all zoom levels.
+  function clampTransform() {}
 
   function renderGraph() {
     const svg = $('#graphSvg');
