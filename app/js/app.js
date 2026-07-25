@@ -14,6 +14,11 @@
   const VW = 900, VH = 480;
   const BASE_POS = {f1:[280,175],f2:[490,95],f3:[510,275],f4:[740,120],f5:[755,305],f6:[235,340]};
 
+  // ── Node radius constants used for collision avoidance ───────────
+  const R_ACTIVE = 34;
+  const R_NORMAL = 26;
+  const R_PAD    = 18; // extra clearance around each node
+
   let currentUser = null;
   let profile = null;
   let vx = 0, vy = 0, vscale = 1;
@@ -157,6 +162,158 @@
     return Number(cvs.valid_votes) / Number(cvs.total_votes);
   }
 
+  // ── Force-directed auto-layout ───────────────────────────────────
+  //
+  // Goals:
+  //  1. Each node is attracted toward the centre-of-mass of its neighbours.
+  //  2. Every pair of nodes repels each other so they don't overlap.
+  //     Repulsion strength is scaled by 1/degree so lightly-connected
+  //     (peripheral) nodes are pushed further out, leaving the centre
+  //     for dense clusters.
+  //  3. A mild gravity toward the canvas centre keeps isolated nodes
+  //     from drifting off-screen.
+  //
+  // The simulation runs for a fixed number of iterations (fast, no
+  // animation needed — result is applied all-at-once before rendering).
+  //
+  function autoLayout() {
+    const nodes = state.nodes;
+    if (nodes.length < 2) return;
+
+    // Build adjacency: undirected degree and neighbour sets
+    const neighbours = new Map(); // id → Set of neighbour ids
+    nodes.forEach(n => neighbours.set(n.id, new Set()));
+    state.links.forEach(l => {
+      if (neighbours.has(l.from_id) && neighbours.has(l.to_id)) {
+        neighbours.get(l.from_id).add(l.to_id);
+        neighbours.get(l.to_id).add(l.from_id);
+      }
+    });
+
+    // Initialise positions: keep existing ones, place newcomers in a
+    // spiral so they start somewhere reasonable.
+    nodes.forEach((n, idx) => {
+      if (!state.positions[n.id]) {
+        const angle = idx * 2.399963;
+        const r     = 80 + idx * 15;
+        state.positions[n.id] = [
+          VW / 2 + r * Math.cos(angle),
+          VH / 2 + r * Math.sin(angle)
+        ];
+      }
+    });
+
+    // Working copy of positions as plain {x,y} objects
+    const pos = {};
+    nodes.forEach(n => {
+      pos[n.id] = { x: state.positions[n.id][0], y: state.positions[n.id][1] };
+    });
+
+    const ITERATIONS    = 200;
+    const MARGIN        = 40;          // min distance from canvas edge
+    const K_ATTRACT     = 0.012;       // spring constant toward neighbour CoM
+    const K_REPULSE     = 28000;       // repulsion strength (base)
+    const K_GRAVITY     = 0.004;       // gentle pull toward canvas centre
+    const MIN_DIST      = 2;           // avoid division-by-zero
+    const cx            = VW / 2;
+    const cy            = VH / 2;
+
+    for (let iter = 0; iter < ITERATIONS; iter++) {
+      // Cooling factor: start fast, slow down toward the end
+      const cool = 1 - iter / ITERATIONS;
+
+      const force = {};
+      nodes.forEach(n => { force[n.id] = { x: 0, y: 0 }; });
+
+      // 1. Gravity toward canvas centre
+      nodes.forEach(n => {
+        force[n.id].x += K_GRAVITY * (cx - pos[n.id].x);
+        force[n.id].y += K_GRAVITY * (cy - pos[n.id].y);
+      });
+
+      // 2. Attraction toward neighbour centre-of-mass
+      nodes.forEach(n => {
+        const nb = neighbours.get(n.id);
+        if (!nb || nb.size === 0) return;
+        let sx = 0, sy = 0, cnt = 0;
+        nb.forEach(nid => {
+          if (pos[nid]) { sx += pos[nid].x; sy += pos[nid].y; cnt++; }
+        });
+        if (cnt === 0) return;
+        const comX = sx / cnt;
+        const comY = sy / cnt;
+        force[n.id].x += K_ATTRACT * (comX - pos[n.id].x);
+        force[n.id].y += K_ATTRACT * (comY - pos[n.id].y);
+      });
+
+      // 3. Pairwise repulsion (O(n²) — acceptable for typical graph sizes)
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          const dx = pos[b.id].x - pos[a.id].x;
+          const dy = pos[b.id].y - pos[a.id].y;
+          const dist = Math.max(MIN_DIST, Math.sqrt(dx * dx + dy * dy));
+
+          // Scale repulsion inversely by degree: peripheral nodes get
+          // pushed out more, dense-cluster nodes hold their ground.
+          const degA = neighbours.get(a.id)?.size || 1;
+          const degB = neighbours.get(b.id)?.size || 1;
+          const degFactor = 2 / (Math.sqrt(degA) + Math.sqrt(degB));
+
+          const rep = (K_REPULSE * degFactor) / (dist * dist);
+          const nx  = dx / dist;
+          const ny  = dy / dist;
+
+          force[a.id].x -= rep * nx;
+          force[a.id].y -= rep * ny;
+          force[b.id].x += rep * nx;
+          force[b.id].y += rep * ny;
+        }
+      }
+
+      // 4. Collision avoidance: if two nodes overlap, push them apart
+      //    by the exact amount needed to clear the minimum separation.
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          const dx   = pos[b.id].x - pos[a.id].x;
+          const dy   = pos[b.id].y - pos[a.id].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const minSep = R_NORMAL + R_NORMAL + R_PAD;
+          if (dist > 0 && dist < minSep) {
+            const push = (minSep - dist) / 2;
+            const nx   = dx / dist;
+            const ny   = dy / dist;
+            force[a.id].x -= push * nx * 0.5;
+            force[a.id].y -= push * ny * 0.5;
+            force[b.id].x += push * nx * 0.5;
+            force[b.id].y += push * ny * 0.5;
+          }
+        }
+      }
+
+      // Apply forces with cooling
+      const maxStep = 20 * cool + 2;
+      nodes.forEach(n => {
+        const fx = force[n.id].x;
+        const fy = force[n.id].y;
+        const mag = Math.sqrt(fx * fx + fy * fy);
+        const scale = mag > maxStep ? maxStep / mag : 1;
+        pos[n.id].x += fx * scale;
+        pos[n.id].y += fy * scale;
+
+        // Clamp to canvas with margin
+        pos[n.id].x = Math.max(MARGIN, Math.min(VW - MARGIN, pos[n.id].x));
+        pos[n.id].y = Math.max(MARGIN, Math.min(VH - MARGIN, pos[n.id].y));
+      });
+    }
+
+    // Write results back to state.positions
+    nodes.forEach(n => {
+      state.positions[n.id] = [pos[n.id].x, pos[n.id].y];
+    });
+  }
+
   async function init() {
     await requireAuth();
     await loadAll();
@@ -216,6 +373,11 @@
     state.linkVoteSummary      = linkVoteSummaryRes.data || [];
 
     if (!byId(state.currentId) && state.nodes[0]) state.currentId = state.nodes[0].id;
+
+    // Auto-layout runs every time data is (re-)loaded so the graph
+    // stays organised after nodes/links are added or removed.
+    autoLayout();
+
     renderStats();
   }
 
